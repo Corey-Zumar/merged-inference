@@ -2,8 +2,8 @@ import sys
 import os
 import tensorflow as tf
 
-class Model:
 
+class Model:
     def __init__(self):
         pass
 
