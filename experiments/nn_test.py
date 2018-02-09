@@ -76,7 +76,7 @@ def main():
         default=0,
         help="The number of the GPU on which to execute the experiment")
 
-    args = parser.parse()
+    args = parser.parse_args()
 
     # Use the same input shape for both nets
     input_shape = (128, 128, 3)

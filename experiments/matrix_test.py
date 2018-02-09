@@ -18,14 +18,16 @@ def eval_sequential(gpu_num, num_trials):
     sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
     with tf.device("/gpu:{}".format(gpu_num)):
         t_inputs = tf.placeholder(tf.float32, [None, 256 * 256])
-        t_mat_a = tf.Variable(256 * 256, 100)
-        t_mat_b = tf.variable(256 * 256, 200)
+        t_mat_a = tf.random_normal([256 * 256, 100], dtype=tf.float32)
+        t_mat_b = tf.random_normal([256 * 256, 200], dtype=tf.float32)
         t_output_a = tf.matmul(t_inputs, t_mat_a)
         t_output_b = tf.matmul(t_inputs, t_mat_b)
 
+    sess.run(tf.global_variables_initializer())
+
     latencies = []
     for _ in range(num_trials):
-        inputs = np.random.rand(10, 256, 256)
+        inputs = np.random.rand(10, 256 * 256)
         feed_dict = {
             t_inputs : inputs
         }
@@ -43,12 +45,14 @@ def eval_merged(gpu_num, num_trials):
     sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
     with tf.device("/gpu:{}".format(gpu_num)):
         t_inputs = tf.placeholder(tf.float32, [None, 256 * 256])
-        t_mat = tf.Variable(256 * 256, 100)
+        t_mat = tf.random_normal([256 * 256, 300], dtype=tf.float32)
         t_output = tf.matmul(t_inputs, t_mat)
+
+    sess.run(tf.global_variables_initializer())
 
     latencies = []
     for _ in range(num_trials):
-        inputs = np.random.rand(10, 256, 256)
+        inputs = np.random.rand(10, 256 * 256)
         feed_dict = {
             t_inputs : inputs
         }
@@ -88,7 +92,7 @@ def main():
         default=False,
         help="If specified, runs the merged multiplication experiment")
 
-    args = parser.parse()
+    args = parser.parse_args()
 
     if args.sequential:
         eval_sequential(args.gpu_num, args.num_trials)
