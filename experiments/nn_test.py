@@ -19,7 +19,7 @@ class SimpleNN(Model):
     def create_graph(self):
         flattened_inp_size = reduce(mul, self.input_shape)
         shape = [None, flattened_inp_size]
-        self.input_tensor = tf.placeholder(dtype=self.tf_dtype, shape)
+        self.input_tensor = tf.placeholder(self.tf_dtype, shape)
 
         # Create hidden layers
         curr_tensor = self.input_tensor
@@ -76,6 +76,8 @@ def main():
         default=0,
         help="The number of the GPU on which to execute the experiment")
 
+    args = parser.parse()
+
     # Use the same input shape for both nets
     input_shape = (128, 128, 3)
     batch_size = 8
@@ -86,3 +88,6 @@ def main():
 
     eval_sequential(
         [nn_a, nn_b], batch_size=args.batch_size, gpu_num=args.gpu_num)
+
+if __name__ == "__main__":
+    main()
