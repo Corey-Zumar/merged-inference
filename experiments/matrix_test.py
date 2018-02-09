@@ -12,8 +12,59 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-
 def eval_sequential(gpu_num, num_trials):
+    logger.info("Running {nt} sequential trials on gpu {gn}".format(
+        nt=num_trials, gn=gpu_num))
+    sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
+    with tf.device("/gpu:{}".format(gpu_num)):
+        t_inputs_a = tf.placeholder(tf.float32, [None, 256 * 256])
+        t_inputs_b = tf.placeholder(tf.float32, [None, 256 * 256])
+        t_mat_a = tf.random_normal([256 * 256, 100], dtype=tf.float32)
+        t_mat_b = tf.random_normal([256 * 256, 200], dtype=tf.float32)
+        t_output_a = tf.matmul(t_inputs_a, t_mat_a)
+        t_output_b = tf.matmul(t_inputs_b, t_mat_b)
+
+    sess.run(tf.global_variables_initializer())
+
+    latencies = []
+    for _ in range(num_trials):
+        inputs_a = np.random.rand(10, 256 * 256)
+        inputs_b = np.random.rand(10, 256 * 256)
+        feed_dict = {
+            t_inputs_a: inputs_a,
+            t_inputs_b: inputs_b
+        }
+        begin = datetime.now()
+        output_a, output_b = sess.run(
+            [t_output_a, t_output_b], feed_dict=feed_dict)
+        end = datetime.now()
+        latency = (end - begin).total_seconds()
+        latencies.append(latency)
+        logger.info("Latency: {} seconds".format(latency))
+
+def eval_merged(gpu_num, num_trials):
+    logger.info("Running {nt} merged trials on gpu {gn}".format(
+        nt=num_trials, gn=gpu_num))
+    sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
+    with tf.device("/gpu:{}".format(gpu_num)):
+        t_inputs = tf.placeholder(tf.float32, [None, 256 * 256])
+        t_mat = tf.random_normal([256 * 256, 300], dtype=tf.float32)
+        t_output = tf.matmul(t_inputs, t_mat)
+
+    sess.run(tf.global_variables_initializer())
+
+    latencies = []
+    for _ in range(num_trials):
+        inputs = np.random.rand(20, 256 * 256)
+        feed_dict = {t_inputs: inputs}
+        begin = datetime.now()
+        output = sess.run(t_output, feed_dict=feed_dict)
+        end = datetime.now()
+        latency = (end - begin).total_seconds()
+        latencies.append(latency)
+        logger.info("Latency: {} seconds".format(latency))
+
+def eval_sequential_ensemble(gpu_num, num_trials):
     logger.info("Running {nt} sequential trials on gpu {gn}".format(
         nt=num_trials, gn=gpu_num))
     sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
@@ -38,8 +89,7 @@ def eval_sequential(gpu_num, num_trials):
         latencies.append(latency)
         logger.info("Latency: {} seconds".format(latency))
 
-
-def eval_merged(gpu_num, num_trials):
+def eval_merged_ensemble(gpu_num, num_trials):
     logger.info("Running {nt} merged trials on gpu {gn}".format(
         nt=num_trials, gn=gpu_num))
     sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
@@ -61,7 +111,6 @@ def eval_merged(gpu_num, num_trials):
         latencies.append(latency)
         logger.info("Latency: {} seconds".format(latency))
 
-
 def main():
     parser = argparse.ArgumentParser(
         description='Benchmark matrix multiplication operations')
@@ -78,17 +127,29 @@ def main():
         default=50,
         help="The number of trials to conduct")
     parser.add_argument(
-        "-s",
-        "--sequential",
+        "-se",
+        "--sequential_ensemble",
         action='store_true',
         default=False,
-        help="If specified, runs the sequential multiplication experiment")
+        help="If specified, runs the sequential multiplication ensemble experiment")
+    parser.add_argument(
+        "-me",
+        "--merged_ensemble",
+        action='store_true',
+        default=False,
+        help="If specified, runs the merged multiplication ensemble experiment")
     parser.add_argument(
         "-m",
         "--merged",
         action='store_true',
         default=False,
         help="If specified, runs the merged multiplication experiment")
+    parser.add_argument(
+        "-s",
+        "--sequential",
+        action='store_true',
+        default=False,
+        help="If specified, runs the sequential multiplication experiment")
 
     args = parser.parse_args()
 
@@ -96,10 +157,12 @@ def main():
         eval_sequential(args.gpu_num, args.num_trials)
     elif args.merged:
         eval_merged(args.gpu_num, args.num_trials)
+    elif args.sequential_ensemble:
+        eval_sequential_ensemble(args.gpu_num, args.num_trials)
+    elif args.merged_ensemble:
+        eval_merged_ensemble(args.gpu_num, args.num_trials)
     else:
-        raise Exception("Either the -m/--merged or -s/--sequential \
-                flag must be specified!")
-
+        raise
 
 if __name__ == "__main__":
     main()
