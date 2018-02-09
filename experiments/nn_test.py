@@ -89,5 +89,6 @@ def main():
     eval_sequential(
         [nn_a, nn_b], batch_size=args.batch_size, gpu_num=args.gpu_num)
 
+
 if __name__ == "__main__":
     main()

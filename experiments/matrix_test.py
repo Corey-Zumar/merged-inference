@@ -6,15 +6,16 @@ import logging
 from datetime import datetime
 
 logging.basicConfig(
-     format='%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
-     datefmt='%y-%m-%d:%H:%M:%S',
-     level=logging.INFO)
+    format='%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
+    datefmt='%y-%m-%d:%H:%M:%S',
+    level=logging.INFO)
 
 logger = logging.getLogger(__name__)
 
+
 def eval_sequential(gpu_num, num_trials):
-    logger.info("Running {nt} sequential trials on gpu {gn}"
-            .format(nt=num_trials, gn=gpu_num))
+    logger.info("Running {nt} sequential trials on gpu {gn}".format(
+        nt=num_trials, gn=gpu_num))
     sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
     with tf.device("/gpu:{}".format(gpu_num)):
         t_inputs = tf.placeholder(tf.float32, [None, 256 * 256])
@@ -28,20 +29,19 @@ def eval_sequential(gpu_num, num_trials):
     latencies = []
     for _ in range(num_trials):
         inputs = np.random.rand(10, 256 * 256)
-        feed_dict = {
-            t_inputs : inputs
-        }
+        feed_dict = {t_inputs: inputs}
         begin = datetime.now()
         output_a, output_b = sess.run(
-                [t_output_a, t_output_b], feed_dict=feed_dict)
+            [t_output_a, t_output_b], feed_dict=feed_dict)
         end = datetime.now()
         latency = (end - begin).total_seconds()
         latencies.append(latency)
         logger.info("Latency: {} seconds".format(latency))
 
+
 def eval_merged(gpu_num, num_trials):
-    logger.info("Running {nt} merged trials on gpu {gn}"
-            .format(nt=num_trials, gn=gpu_num))
+    logger.info("Running {nt} merged trials on gpu {gn}".format(
+        nt=num_trials, gn=gpu_num))
     sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
     with tf.device("/gpu:{}".format(gpu_num)):
         t_inputs = tf.placeholder(tf.float32, [None, 256 * 256])
@@ -53,16 +53,14 @@ def eval_merged(gpu_num, num_trials):
     latencies = []
     for _ in range(num_trials):
         inputs = np.random.rand(10, 256 * 256)
-        feed_dict = {
-            t_inputs : inputs
-        }
+        feed_dict = {t_inputs: inputs}
         begin = datetime.now()
-        output = sess.run(
-                t_output, feed_dict=feed_dict)
+        output = sess.run(t_output, feed_dict=feed_dict)
         end = datetime.now()
         latency = (end - begin).total_seconds()
         latencies.append(latency)
         logger.info("Latency: {} seconds".format(latency))
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -99,9 +97,9 @@ def main():
     elif args.merged:
         eval_merged(args.gpu_num, args.num_trials)
     else:
-        raise Exception(
-                "Either the -m/--merged or -s/--sequential \
+        raise Exception("Either the -m/--merged or -s/--sequential \
                 flag must be specified!")
+
 
 if __name__ == "__main__":
     main()
