@@ -22,7 +22,7 @@ import tensorflow as tf
 
 tf.logging.set_verbosity(tf.logging.INFO)
 
-
+N_ENSEMBLE = 4
 def cnn_model_fn(features, labels, mode):
   """Model function for CNN."""
   # Input Layer
@@ -35,93 +35,98 @@ def cnn_model_fn(features, labels, mode):
   # Padding is added to preserve width and height.
   # Input Tensor Shape: [batch_size, 28, 28, 1]
   # Output Tensor Shape: [batch_size, 28, 28, 32]
-  conv1 = tf.layers.conv2d(
+  conv1s = []
+  for _ in range(N_ENSEMBLE):
+    conv1s.append(tf.layers.conv2d(
       inputs=input_layer,
       filters=32,
       kernel_size=[5, 5],
       padding="same",
-      activation=tf.nn.relu)
-  conv1_1 = tf.layers.conv2d(
-      inputs=input_layer,
-      filters=32,
-      kernel_size=[5, 5],
-      padding="same",
-      activation=tf.nn.relu)
+      activation=tf.nn.relu))
 
   # Pooling Layer #1
   # First max pooling layer with a 2x2 filter and stride of 2
   # Input Tensor Shape: [batch_size, 28, 28, 32]
   # Output Tensor Shape: [batch_size, 14, 14, 32]
-  pool1 = tf.layers.max_pooling2d(inputs=conv1, pool_size=[2, 2], strides=2)
-  pool1_1 = tf.layers.max_pooling2d(inputs=conv1_1, pool_size=[2, 2], strides=2)
+  pool1s = []
+  for i in range(N_ENSEMBLE):
+    pool1s.append(tf.layers.max_pooling2d(inputs=conv1s[i], pool_size=[2, 2], strides=2))
 
   # Convolutional Layer #2
   # Computes 64 features using a 5x5 filter.
   # Padding is added to preserve width and height.
   # Input Tensor Shape: [batch_size, 14, 14, 32]
   # Output Tensor Shape: [batch_size, 14, 14, 64]
-  conv2 = tf.layers.conv2d(
-      inputs=pool1,
+
+  conv2s = []
+  for i in range(N_ENSEMBLE):
+    conv2s.append(tf.layers.conv2d(
+      inputs=pool1s[i],
       filters=64,
       kernel_size=[5, 5],
       padding="same",
-      activation=tf.nn.relu)
-  conv2_1 = tf.layers.conv2d(
-      inputs=pool1_1,
-      filters=64,
-      kernel_size=[5, 5],
-      padding="same",
-      activation=tf.nn.relu)
+      activation=tf.nn.relu))
 
   # Pooling Layer #2
   # Second max pooling layer with a 2x2 filter and stride of 2
   # Input Tensor Shape: [batch_size, 14, 14, 64]
   # Output Tensor Shape: [batch_size, 7, 7, 64]
-  pool2 = tf.layers.max_pooling2d(inputs=conv2, pool_size=[2, 2], strides=2)
-  pool2_1 = tf.layers.max_pooling2d(inputs=conv2_1, pool_size=[2, 2], strides=2)
-
+  pool2s = []
+  for i in range(N_ENSEMBLE):
+    pool2s.append(tf.layers.max_pooling2d(inputs=conv2s[i], pool_size=[2, 2], strides=2))
   # Flatten tensor into a batch of vectors
   # Input Tensor Shape: [batch_size, 7, 7, 64]
   # Output Tensor Shape: [batch_size, 7 * 7 * 64]
-  pool2_flat = tf.reshape(pool2, [-1, 7 * 7 * 64])
-  pool2_flat_1 = tf.reshape(pool2_1, [-1, 7 * 7 * 64])
+  pool2_flats = []
+  for i in range(N_ENSEMBLE):
+    pool2_flats.append(tf.reshape(pool2s[i], [-1, 7 * 7 * 64]))
 
   # Dense Layer
   # Densely connected layer with 1024 neurons
   # Input Tensor Shape: [batch_size, 7 * 7 * 64]
   # Output Tensor Shape: [batch_size, 1024]
-  dense = tf.layers.dense(inputs=pool2_flat, units=1024, activation=tf.nn.relu)
-  dense_1 = tf.layers.dense(inputs=pool2_flat_1, units=1024, activation=tf.nn.relu)
+  dense_layers = []
+  for i in range(N_ENSEMBLE):
+    dense_layers.append(tf.layers.dense(inputs=pool2_flats[i], units=1024, activation=tf.nn.relu))
 
   # Add dropout operation; 0.6 probability that element will be kept
-  dropout = tf.layers.dropout(
-      inputs=dense, rate=0.4, training=mode == tf.estimator.ModeKeys.TRAIN)
-  dropout_1 = tf.layers.dropout(
-      inputs=dense_1, rate=0.4, training=mode == tf.estimator.ModeKeys.TRAIN)
+  dropouts = []
+  for i in range(N_ENSEMBLE):
+    dropouts.append(tf.layers.dropout(
+      inputs=dense_layers[i], rate=0.4, training=mode == tf.estimator.ModeKeys.TRAIN))
 
   # Logits layer
   # Input Tensor Shape: [batch_size, 1024]
   # Output Tensor Shape: [batch_size, 10]
-  logits = tf.layers.dense(inputs=dropout, units=10)
-  logits_1 = tf.layers.dense(inputs=dropout, units=10)
-  combined_node = tf.add(logits, logits_1)
-  combined_node = tf.divide(combined_node, 2)
-  classes = tf.argmax(input=combined_node, axis=1)
-  softmax = tf.nn.softmax(combined_node, name="softmax_tensor")
+  logits_layers = []
+  for i in range(N_ENSEMBLE):
+    logits_layers.append(tf.layers.dense(inputs=dropouts[i], units=10))
 
+  # averaging step
+  while (len(logits_layers) >= 2):
+    x, y = logits_layers[0], logits_layers[1]
+    z = tf.add(x, y)
+    logits_layers.remove(x)
+    logits_layers.remove(y)
+    logits_layers.append(z)
+  all_added = logits_layers[0]
+  all_added = tf.add(m0m1, m2m3)
+  combined_logits = tf.divide(all_added, N_ENSEMBLE)
+
+  classes = tf.argmax(input=combined_logits, axis=1)
+  softmax_tensor = tf.nn.softmax(combined_logits, name="softmax_tensor")
   predictions = {
       # Generate predictions (for PREDICT and EVAL mode)
       "classes": classes,
       # Add `softmax_tensor` to the graph. It is used for PREDICT and by the
       # `logging_hook`.
-      "probabilities": softmax
+      "probabilities": softmax_tensor
   }
   if mode == tf.estimator.ModeKeys.PREDICT:
     return tf.estimator.EstimatorSpec(mode=mode, predictions=predictions)
 
   # Calculate Loss (for both TRAIN and EVAL modes)
-  loss = tf.losses.sparse_softmax_cross_entropy(labels=labels, logits=combined_node)
-
+  loss = tf.losses.sparse_softmax_cross_entropy(labels=labels, logits=combined_logits)
   # Configure the Training Op (for TRAIN mode)
   if mode == tf.estimator.ModeKeys.TRAIN:
     optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.001)
@@ -134,8 +139,7 @@ def cnn_model_fn(features, labels, mode):
   eval_metric_ops = {
       "accuracy": tf.metrics.accuracy(
           labels=labels, predictions=predictions["classes"])}
-  return tf.estimator.EstimatorSpec(
-      mode=mode, loss=loss, eval_metric_ops=eval_metric_ops)
+  return tf.estimator.EstimatorSpec(mode=mode, loss=loss, eval_metric_ops=eval_metric_ops)
 
 
 def main(unused_argv):
@@ -148,7 +152,7 @@ def main(unused_argv):
 
   # Create the Estimator
   mnist_classifier = tf.estimator.Estimator(
-      model_fn=cnn_model_fn, model_dir="/tmp/mnist_convnet_model")
+      model_fn=cnn_model_fn, model_dir="mnist_convnet_model_" + str(N_ENSEMBLE) + "/")
 
   # Set up logging for predictions
   # Log the values in the "Softmax" tensor with label "probabilities"
@@ -166,7 +170,7 @@ def main(unused_argv):
   mnist_classifier.train(
       input_fn=train_input_fn,
       steps=20000,
-      hooks=[logging_hook])
+      hooks=[])
 
   # Evaluate the model and print results
   eval_input_fn = tf.estimator.inputs.numpy_input_fn(
