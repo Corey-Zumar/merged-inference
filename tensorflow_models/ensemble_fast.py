@@ -23,12 +23,13 @@ import tensorflow as tf
 tf.logging.set_verbosity(tf.logging.INFO)
 
 N_ENSEMBLE = 4
+INPUT_TENSOR_NAME = "x"
 def cnn_model_fn(features, labels, mode):
   """Model function for CNN."""
   # Input Layer
   # Reshape X to 4-D tensor: [batch_size, width, height, channels]
   # MNIST images are 28x28 pixels, and have one color channel
-  input_layer = tf.reshape(features["x"], [-1, 28, 28, 1])
+  input_layer = tf.reshape(features[INPUT_TENSOR_NAME], [-1, 28, 28, 1])
 
   # Convolutional Layer #1
   # Computes 32 features using a 5x5 filter with ReLU activation.
@@ -162,7 +163,7 @@ def main(unused_argv):
 
   # Train the model
   train_input_fn = tf.estimator.inputs.numpy_input_fn(
-      x={"x": train_data},
+      x={INPUT_TENSOR_NAME: train_data},
       y=train_labels,
       batch_size=100,
       num_epochs=None,
@@ -174,12 +175,19 @@ def main(unused_argv):
 
   # Evaluate the model and print results
   eval_input_fn = tf.estimator.inputs.numpy_input_fn(
-      x={"x": eval_data},
+      x={INPUT_TENSOR_NAME: eval_data},
       y=eval_labels,
       num_epochs=1,
       shuffle=False)
   eval_results = mnist_classifier.evaluate(input_fn=eval_input_fn)
   print(eval_results)
+
+  # Save model
+  x = tf.placeholder(tf.float32, [None, 784])
+  export_input_fn = tf.estimator.export.build_raw_serving_input_receiver_fn({INPUT_TENSOR_NAME: x})()
+  servable_model_dir = "./serving_savemodel"
+  servable_model_path = m.export_savedmodel(servable_model_dir, export_input_fn)
+  print(servable_model_path)
 
 
 if __name__ == "__main__":
