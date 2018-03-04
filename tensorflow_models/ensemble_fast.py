@@ -114,6 +114,7 @@ def cnn_model_fn(features, labels, mode):
   combined_logits = tf.divide(all_added, N_ENSEMBLE)
 
   classes = tf.argmax(input=combined_logits, axis=1)
+  string_classes = tf.as_string(classes)
   softmax_tensor = tf.nn.softmax(combined_logits, name="softmax_tensor")
   predictions = {
       # Generate predictions (for PREDICT and EVAL mode)
@@ -123,7 +124,11 @@ def cnn_model_fn(features, labels, mode):
       "probabilities": softmax_tensor
   }
   if mode == tf.estimator.ModeKeys.PREDICT:
-    return tf.estimator.EstimatorSpec(mode=mode, predictions=predictions)
+    return tf.estimator.EstimatorSpec(mode=mode,
+                                      predictions=predictions,
+                                      export_outputs={
+                                        'head_name': tf.estimator.export.ClassificationOutput(classes=string_classes)
+                                      })
 
   # Calculate Loss (for both TRAIN and EVAL modes)
   loss = tf.losses.sparse_softmax_cross_entropy(labels=labels, logits=combined_logits)
@@ -133,13 +138,23 @@ def cnn_model_fn(features, labels, mode):
     train_op = optimizer.minimize(
         loss=loss,
         global_step=tf.train.get_global_step())
-    return tf.estimator.EstimatorSpec(mode=mode, loss=loss, train_op=train_op)
+    return tf.estimator.EstimatorSpec(mode=mode,
+                                      loss=loss,
+                                      train_op=train_op,
+                                      export_outputs={
+                                        'head_name': tf.estimator.export.ClassificationOutput(classes=string_classes)
+                                      })
 
   # Add evaluation metrics (for EVAL mode)
   eval_metric_ops = {
       "accuracy": tf.metrics.accuracy(
           labels=labels, predictions=predictions["classes"])}
-  return tf.estimator.EstimatorSpec(mode=mode, loss=loss, eval_metric_ops=eval_metric_ops)
+  return tf.estimator.EstimatorSpec(mode=mode,
+                                    loss=loss,
+                                    eval_metric_ops=eval_metric_ops,
+                                    export_outputs={
+                                        'head_name': tf.estimator.export.ClassificationOutput(classes=string_classes)
+                                      })
 
 
 def main(unused_argv):
@@ -183,9 +198,9 @@ def main(unused_argv):
 
   # Save model
   x = tf.placeholder(tf.float32, [None, 784])
-  export_input_fn = tf.estimator.export.build_raw_serving_input_receiver_fn({INPUT_TENSOR_NAME: x})()
+  export_input_fn = tf.estimator.export.build_raw_serving_input_receiver_fn({INPUT_TENSOR_NAME: x})
   servable_model_dir = "./serving_savemodel"
-  servable_model_path = m.export_savedmodel(servable_model_dir, export_input_fn)
+  servable_model_path = mnist_classifier.export_savedmodel(servable_model_dir, export_input_fn)
   print(servable_model_path)
 
 
