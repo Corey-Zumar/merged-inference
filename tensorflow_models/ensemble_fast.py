@@ -110,7 +110,6 @@ def cnn_model_fn(features, labels, mode):
     logits_layers.remove(y)
     logits_layers.append(z)
   all_added = logits_layers[0]
-  all_added = tf.add(m0m1, m2m3)
   combined_logits = tf.divide(all_added, N_ENSEMBLE)
 
   classes = tf.argmax(input=combined_logits, axis=1)
