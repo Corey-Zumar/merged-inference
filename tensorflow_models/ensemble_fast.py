@@ -25,10 +25,6 @@ def cnn_model_fn(placeholders):
   x = placeholders['x']
   y_ = placeholders['labels']
   prob = placeholders['dropout']
-  """Model function for CNN."""
-  # Input Layer
-  # Reshape X to 4-D tensor: [FLAGS.batch_size, width, height, channels]
-  # MNIST images are 28x28 pixels, and have one color channel
   input_layer = tf.reshape(x, [-1, 28, 28, 1])
   # Convolutional Layer #1
   # Computes 32 features using a 5x5 filter with ReLU activation.
@@ -220,7 +216,6 @@ def main(_):
     # final save
     save_path = saver.save(sess, MODEL_DIR)
     
-
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
   parser.add_argument(
