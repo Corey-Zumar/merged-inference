@@ -173,7 +173,7 @@ def main(_):
   train_size = train_labels.shape[0]
   test_data = mnist.test.images  # Returns np.array
   test_labels = np.asarray(mnist.test.labels, dtype=np.int32)
-  # obtain the relevant ops
+
   start_time = time.time()
   with tf.Session() as sess:
     x = tf.placeholder(tf.float32, shape=(FLAGS.batch_size, IMAGE_SIZE * IMAGE_SIZE))
@@ -181,11 +181,14 @@ def main(_):
     prob = tf.placeholder_with_default(1.0, shape=())
     eval_data_placeholder = tf.placeholder(tf.float32, shape=(FLAGS.batch_size, IMAGE_SIZE * IMAGE_SIZE))
     loss, predictions, train_op, eval_metric_ops, eval_in_batches = cnn_model_fn({'x' : x, 'labels' : y_, 'dropout' : prob})
-    # Train the model
+
+    # Initialize variables
     print('Initializing the model')
     init_op = tf.global_variables_initializer()
     saver = tf.train.Saver()
     sess.run([init_op])
+
+    # Train the model
     for step in xrange(int(FLAGS.epochs * train_size) // FLAGS.batch_size):
       offset = (step * FLAGS.batch_size) % (train_size - FLAGS.batch_size)
       batch_data = train_data[offset:(offset + FLAGS.batch_size)]
@@ -196,7 +199,7 @@ def main(_):
         print('Step %d (epoch %.2f)' %
               (step, float(step) * FLAGS.batch_size / train_size))
       if step % FLAGS.eval_frequency == 0:
-        # fetch some extra nodes' data
+        # Run batch evaluations without backprop on the loss
         predict_feed_dict = feed_dict.copy()
         predict_feed_dict[prob] = 1
         l, batch_preds = sess.run([loss, predictions['probabilities']],
@@ -211,9 +214,9 @@ def main(_):
         print('Validation error: %.1f%%' % error_rate(eval_in_batches(val_data, sess), val_labels))
       if step % FLAGS.save_frequency == 0:
         save_path = saver.save(sess, MODEL_DIR)
-    # eval test
+    # Compute error over the held out test set
     print('Test error: %.1f%%' % error_rate(eval_in_batches(test_data, sess), test_labels))
-    # final save
+    # Save final model
     save_path = saver.save(sess, MODEL_DIR)
     
 if __name__ == "__main__":
