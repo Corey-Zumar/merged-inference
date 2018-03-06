@@ -1,119 +1,155 @@
-#  Copyright 2016 The TensorFlow Authors. All Rights Reserved.
-#
-#  Licensed under the Apache License, Version 2.0 (the "License");
-#  you may not use this file except in compliance with the License.
-#  You may obtain a copy of the License at
-#
-#   http://www.apache.org/licenses/LICENSE-2.0
-#
-#  Unless required by applicable law or agreed to in writing, software
-#  distributed under the License is distributed on an "AS IS" BASIS,
-#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#  See the License for the specific language governing permissions and
-#  limitations under the License.
-"""Convolutional Neural Network Estimator for MNIST, built with tf.layers."""
-
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
 import numpy as np
 import tensorflow as tf
+import time
+import argparse
 
 tf.logging.set_verbosity(tf.logging.INFO)
 
-N_ENSEMBLE = 4
-def cnn_model_fn(features, labels, mode):
+IMAGE_SIZE = 28
+NUM_LABELS = 10
+MODEL_DIR = "models/mnist_model.ckpt"
+FLAGS = None
+
+def error_rate(predictions, labels):
+  """Return the error rate based on dense predictions and sparse labels."""
+  return 100.0 - (
+      100.0 *
+      np.sum(np.argmax(predictions, 1) == labels) /
+      predictions.shape[0])
+
+def cnn_model_fn(placeholders):
+  x = placeholders['x']
+  y_ = placeholders['labels']
+  prob = placeholders['dropout']
   """Model function for CNN."""
   # Input Layer
-  # Reshape X to 4-D tensor: [batch_size, width, height, channels]
+  # Reshape X to 4-D tensor: [FLAGS.batch_size, width, height, channels]
   # MNIST images are 28x28 pixels, and have one color channel
-  input_layer = tf.reshape(features["x"], [-1, 28, 28, 1])
-
+  input_layer = tf.reshape(x, [-1, 28, 28, 1])
   # Convolutional Layer #1
   # Computes 32 features using a 5x5 filter with ReLU activation.
   # Padding is added to preserve width and height.
-  # Input Tensor Shape: [batch_size, 28, 28, 1]
-  # Output Tensor Shape: [batch_size, 28, 28, 32]
+  # Input Tensor Shape: [FLAGS.batch_size, 28, 28, 1]
+  # Output Tensor Shape: [FLAGS.batch_size, 28, 28, 32]
   conv1s = []
-  for _ in range(N_ENSEMBLE):
-    conv1s.append(tf.layers.conv2d(
-      inputs=input_layer,
-      filters=32,
-      kernel_size=[5, 5],
-      padding="same",
-      activation=tf.nn.relu))
+  for i in range(FLAGS.n_ensemble):
+    with tf.variable_scope('conv1_' + str(i)) as scope:
+      conv1s.append(tf.layers.conv2d(
+        inputs=input_layer,
+        filters=32,
+        kernel_size=[5, 5],
+        padding="same",
+        activation=tf.nn.relu,
+        name=scope.name))
 
   # Pooling Layer #1
   # First max pooling layer with a 2x2 filter and stride of 2
-  # Input Tensor Shape: [batch_size, 28, 28, 32]
-  # Output Tensor Shape: [batch_size, 14, 14, 32]
+  # Input Tensor Shape: [FLAGS.batch_size, 28, 28, 32]
+  # Output Tensor Shape: [FLAGS.batch_size, 14, 14, 32]
   pool1s = []
-  for i in range(N_ENSEMBLE):
-    pool1s.append(tf.layers.max_pooling2d(inputs=conv1s[i], pool_size=[2, 2], strides=2))
+  for i in range(FLAGS.n_ensemble):
+    with tf.variable_scope('pool1_' + str(i)) as scope:
+      pool1s.append(tf.layers.max_pooling2d(inputs=conv1s[i], pool_size=[2, 2], strides=2, name=scope.name))
 
   # Convolutional Layer #2
   # Computes 64 features using a 5x5 filter.
   # Padding is added to preserve width and height.
-  # Input Tensor Shape: [batch_size, 14, 14, 32]
-  # Output Tensor Shape: [batch_size, 14, 14, 64]
+  # Input Tensor Shape: [FLAGS.batch_size, 14, 14, 32]
+  # Output Tensor Shape: [FLAGS.batch_size, 14, 14, 64]
 
   conv2s = []
-  for i in range(N_ENSEMBLE):
-    conv2s.append(tf.layers.conv2d(
-      inputs=pool1s[i],
-      filters=64,
-      kernel_size=[5, 5],
-      padding="same",
-      activation=tf.nn.relu))
+  for i in range(FLAGS.n_ensemble):
+    with tf.variable_scope('conv2_' + str(i)) as scope:
+      conv2s.append(tf.layers.conv2d(
+        inputs=pool1s[i],
+        filters=64,
+        kernel_size=[5, 5],
+        padding="same",
+        activation=tf.nn.relu,
+        name = scope.name))
 
   # Pooling Layer #2
   # Second max pooling layer with a 2x2 filter and stride of 2
-  # Input Tensor Shape: [batch_size, 14, 14, 64]
-  # Output Tensor Shape: [batch_size, 7, 7, 64]
+  # Input Tensor Shape: [FLAGS.batch_size, 14, 14, 64]
+  # Output Tensor Shape: [FLAGS.batch_size, 7, 7, 64]
   pool2s = []
-  for i in range(N_ENSEMBLE):
-    pool2s.append(tf.layers.max_pooling2d(inputs=conv2s[i], pool_size=[2, 2], strides=2))
+  for i in range(FLAGS.n_ensemble):
+    with tf.variable_scope('pool2_' + str(i)) as scope:
+      pool2s.append(tf.layers.max_pooling2d(inputs=conv2s[i], pool_size=[2, 2], strides=2, name=scope.name))
+
   # Flatten tensor into a batch of vectors
-  # Input Tensor Shape: [batch_size, 7, 7, 64]
-  # Output Tensor Shape: [batch_size, 7 * 7 * 64]
+  # Input Tensor Shape: [FLAGS.batch_size, 7, 7, 64]
+  # Output Tensor Shape: [FLAGS.batch_size, 7 * 7 * 64]
   pool2_flats = []
-  for i in range(N_ENSEMBLE):
-    pool2_flats.append(tf.reshape(pool2s[i], [-1, 7 * 7 * 64]))
+  for i in range(FLAGS.n_ensemble):
+    with tf.variable_scope('pool2_flats_' + str(i)) as scope:
+      pool2_flats.append(tf.reshape(pool2s[i], [-1, 7 * 7 * 64], name=scope.name))
 
   # Dense Layer
   # Densely connected layer with 1024 neurons
-  # Input Tensor Shape: [batch_size, 7 * 7 * 64]
-  # Output Tensor Shape: [batch_size, 1024]
+  # Input Tensor Shape: [FLAGS.batch_size, 7 * 7 * 64]
+  # Output Tensor Shape: [FLAGS.batch_size, 1024]
   dense_layers = []
-  for i in range(N_ENSEMBLE):
-    dense_layers.append(tf.layers.dense(inputs=pool2_flats[i], units=1024, activation=tf.nn.relu))
+  for i in range(FLAGS.n_ensemble):
+    with tf.variable_scope('dense_' + str(i)) as scope:
+      dense_layers.append(tf.layers.dense(inputs=pool2_flats[i], units=1024, activation=tf.nn.relu, name=scope.name))
 
   # Add dropout operation; 0.6 probability that element will be kept
   dropouts = []
-  for i in range(N_ENSEMBLE):
-    dropouts.append(tf.layers.dropout(
-      inputs=dense_layers[i], rate=0.4, training=mode == tf.estimator.ModeKeys.TRAIN))
+  for i in range(FLAGS.n_ensemble):
+    with tf.variable_scope('dropout_' + str(i)) as scope:
+      dropouts.append(tf.layers.dropout(inputs=dense_layers[i], rate=prob, name = scope.name))
 
   # Logits layer
-  # Input Tensor Shape: [batch_size, 1024]
-  # Output Tensor Shape: [batch_size, 10]
+  # Input Tensor Shape: [FLAGS.batch_size, 1024]
+  # Output Tensor Shape: [FLAGS.batch_size, 10]
+
   logits_layers = []
-  for i in range(N_ENSEMBLE):
-    logits_layers.append(tf.layers.dense(inputs=dropouts[i], units=10))
+  for i in range(FLAGS.n_ensemble):
+    with tf.variable_scope('logits_' + str(i)) as scope:
+      logits_layers.append(tf.layers.dense(inputs=dropouts[i], units=10, name=scope.name))
 
   # averaging step
+  k = 0
   while (len(logits_layers) >= 2):
-    x, y = logits_layers[0], logits_layers[1]
-    z = tf.add(x, y)
-    logits_layers.remove(x)
-    logits_layers.remove(y)
-    logits_layers.append(z)
+    logit_0, logit_1 = logits_layers[0], logits_layers[1]
+    with tf.variable_scope('add_' + str(k)) as scope:
+      combined_logit = tf.add(logit_0, logit_1, name=scope.name)
+    k += 1
+    logits_layers.remove(logit_0)
+    logits_layers.remove(logit_1)
+    logits_layers.append(combined_logit)
   all_added = logits_layers[0]
-  combined_logits = tf.divide(all_added, N_ENSEMBLE)
-
-  classes = tf.argmax(input=combined_logits, axis=1)
+  combined_logits = tf.divide(all_added, float(FLAGS.n_ensemble), name= 'average_tensor')
+  classes = tf.argmax(input=combined_logits, axis=1, name="output_classes")
   softmax_tensor = tf.nn.softmax(combined_logits, name="softmax_tensor")
+  # Small utility function to evaluate a dataset by feeding batches of data to
+  # {eval_data} and pulling the results from {eval_predictions}.
+  # Saves memory and enables this to run on smaller GPUs.
+  def eval_in_batches(data, sess):
+    """Get all predictions for a dataset by running it in small batches."""
+    size = data.shape[0]
+    if size < FLAGS.batch_size:
+      raise ValueError("batch size for evals larger than dataset: %d" % size)
+    predictions = np.ndarray(shape=(size, NUM_LABELS), dtype=np.float32)
+    for begin in xrange(0, size, FLAGS.batch_size):
+      end = begin + FLAGS.batch_size
+      if end <= size:
+        batch_data = data[begin:end, ...]
+        predictions[begin:end, :] = sess.run(
+            softmax_tensor,
+            feed_dict={x: batch_data})
+      else:
+        batch_data = data[-FLAGS.batch_size:, ...]
+        batch_predictions = sess.run(
+            softmax_tensor,
+            feed_dict={x: batch_data})
+        predictions[begin:, :] = batch_predictions[begin - size:, :]
+    return predictions
   predictions = {
       # Generate predictions (for PREDICT and EVAL mode)
       "classes": classes,
@@ -121,65 +157,107 @@ def cnn_model_fn(features, labels, mode):
       # `logging_hook`.
       "probabilities": softmax_tensor
   }
-  if mode == tf.estimator.ModeKeys.PREDICT:
-    return tf.estimator.EstimatorSpec(mode=mode, predictions=predictions)
-
   # Calculate Loss (for both TRAIN and EVAL modes)
-  loss = tf.losses.sparse_softmax_cross_entropy(labels=labels, logits=combined_logits)
-  # Configure the Training Op (for TRAIN mode)
-  if mode == tf.estimator.ModeKeys.TRAIN:
-    optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.001)
-    train_op = optimizer.minimize(
-        loss=loss,
-        global_step=tf.train.get_global_step())
-    return tf.estimator.EstimatorSpec(mode=mode, loss=loss, train_op=train_op)
-
+  loss = tf.losses.sparse_softmax_cross_entropy(labels=y_, logits=combined_logits)
+  optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.001)
   # Add evaluation metrics (for EVAL mode)
   eval_metric_ops = {
       "accuracy": tf.metrics.accuracy(
-          labels=labels, predictions=predictions["classes"])}
-  return tf.estimator.EstimatorSpec(mode=mode, loss=loss, eval_metric_ops=eval_metric_ops)
+          labels=y_, predictions=predictions["classes"])}
+  train_op = optimizer.minimize(loss=loss, global_step=tf.train.get_global_step())
+  return loss, predictions, train_op, eval_metric_ops, eval_in_batches
 
-
-def main(unused_argv):
+def main(_):
   # Load training and eval data
   mnist = tf.contrib.learn.datasets.load_dataset("mnist")
-  train_data = mnist.train.images  # Returns np.array
-  train_labels = np.asarray(mnist.train.labels, dtype=np.int32)
-  eval_data = mnist.test.images  # Returns np.array
-  eval_labels = np.asarray(mnist.test.labels, dtype=np.int32)
-
-  # Create the Estimator
-  mnist_classifier = tf.estimator.Estimator(
-      model_fn=cnn_model_fn, model_dir="mnist_convnet_model_" + str(N_ENSEMBLE) + "/")
-
-  # Set up logging for predictions
-  # Log the values in the "Softmax" tensor with label "probabilities"
-  tensors_to_log = {"probabilities": "softmax_tensor"}
-  logging_hook = tf.train.LoggingTensorHook(
-      tensors=tensors_to_log, every_n_iter=50)
-
-  # Train the model
-  train_input_fn = tf.estimator.inputs.numpy_input_fn(
-      x={"x": train_data},
-      y=train_labels,
-      batch_size=100,
-      num_epochs=None,
-      shuffle=True)
-  mnist_classifier.train(
-      input_fn=train_input_fn,
-      steps=20000,
-      hooks=[])
-
-  # Evaluate the model and print results
-  eval_input_fn = tf.estimator.inputs.numpy_input_fn(
-      x={"x": eval_data},
-      y=eval_labels,
-      num_epochs=1,
-      shuffle=False)
-  eval_results = mnist_classifier.evaluate(input_fn=eval_input_fn)
-  print(eval_results)
-
+  val_data = mnist.train.images[:FLAGS.validation_size]  # Returns np.array
+  val_labels = np.asarray(mnist.train.labels[:FLAGS.validation_size], dtype=np.int32)
+  train_data = mnist.train.images[FLAGS.validation_size:]
+  train_labels = np.asarray(mnist.train.labels[FLAGS.validation_size:], dtype=np.int32)
+  train_size = train_labels.shape[0]
+  test_data = mnist.test.images  # Returns np.array
+  test_labels = np.asarray(mnist.test.labels, dtype=np.int32)
+  # obtain the relevant ops
+  start_time = time.time()
+  with tf.Session() as sess:
+    x = tf.placeholder(tf.float32, shape=(FLAGS.batch_size, IMAGE_SIZE * IMAGE_SIZE))
+    y_ = tf.placeholder(tf.int64, shape=(FLAGS.batch_size,))
+    prob = tf.placeholder_with_default(1.0, shape=())
+    eval_data_placeholder = tf.placeholder(tf.float32, shape=(FLAGS.batch_size, IMAGE_SIZE * IMAGE_SIZE))
+    loss, predictions, train_op, eval_metric_ops, eval_in_batches = cnn_model_fn({'x' : x, 'labels' : y_, 'dropout' : prob})
+    # Train the model
+    print('Initializing the model')
+    init_op = tf.global_variables_initializer()
+    saver = tf.train.Saver()
+    sess.run([init_op])
+    for step in xrange(int(FLAGS.epochs * train_size) // FLAGS.batch_size):
+      offset = (step * FLAGS.batch_size) % (train_size - FLAGS.batch_size)
+      batch_data = train_data[offset:(offset + FLAGS.batch_size)]
+      batch_labels = train_labels[offset:(offset + FLAGS.batch_size)]
+      feed_dict = {x : batch_data, y_ : batch_labels, prob : 0.5}
+      sess.run(train_op, feed_dict)
+      if FLAGS.verbose:
+        print('Step %d (epoch %.2f)' %
+              (step, float(step) * FLAGS.batch_size / train_size))
+      if step % FLAGS.eval_frequency == 0:
+        # fetch some extra nodes' data
+        predict_feed_dict = feed_dict.copy()
+        predict_feed_dict[prob] = 1
+        l, batch_preds = sess.run([loss, predictions['probabilities']],
+                                      feed_dict=predict_feed_dict)
+        elapsed_time = time.time() - start_time
+        start_time = time.time()
+        print('Step %d (epoch %.2f), %.1f ms' %
+              (step, float(step) * FLAGS.batch_size / train_size,
+               1000 * elapsed_time / FLAGS.eval_frequency))
+        print('Minibatch loss: %.3f' % (l))
+        print('Minibatch error: %.1f%%' % error_rate(batch_preds, batch_labels))
+        print('Validation error: %.1f%%' % error_rate(eval_in_batches(val_data, sess), val_labels))
+      if step % FLAGS.save_frequency == 0:
+        save_path = saver.save(sess, MODEL_DIR)
+    # eval test
+    print('Test error: %.1f%%' % error_rate(eval_in_batches(test_data, sess), test_labels))
+    # final save
+    save_path = saver.save(sess, MODEL_DIR)
+    
 
 if __name__ == "__main__":
-  tf.app.run()
+  parser = argparse.ArgumentParser()
+  parser.add_argument(
+      '--verbose',
+      default=False,
+      action='store_true',
+      help='Print step information more often')
+  parser.add_argument(
+      '--n_ensemble',
+      default=4,
+      type=int,
+      help='Specify the number of ensembles to include')
+  parser.add_argument(
+      '--batch_size',
+      default=64,
+      type=int,
+      help='Specify batch size for evaluation')
+  parser.add_argument(
+      '--epochs',
+      default=4,
+      type=int,
+      help='Specify number of epochs to train for')
+  parser.add_argument(
+      '--eval_frequency',
+      default=100,
+      type=int,
+      help='Specify how often to evaluate model performance')
+  parser.add_argument(
+      '--save_frequency',
+      default=1000,
+      type=int,
+      help='Specify how often to evaluate model performance')
+  parser.add_argument(
+      '--validation_size',
+      default=1000,
+      type=int,
+      help='Number of samples to set aside for validation')
+
+  FLAGS, unparsed = parser.parse_known_args()
+  tf.app.run(main=main)
