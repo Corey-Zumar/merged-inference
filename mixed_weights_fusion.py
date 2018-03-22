@@ -22,10 +22,10 @@ import numpy as np
 
 def fuse_distinct_matmul(graph, op1_name, op2_name):
 	"""
-	op1 : tf.Tensor
-		The first matrix multiplication operation
-	op2 : tf.Tensor
-		The second matrix multiplication operation
+	op1 : str
+		The name of the first matrix multiplication operation
+	op2 : str
+		The name of the second matrix multiplication operation
 	"""
 
 	with tf.Session() as sess:
