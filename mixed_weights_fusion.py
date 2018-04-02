@@ -85,9 +85,9 @@ def evaluate_matmul():
 
 	idx = 0
 	for s1, s2 in all_sizes:
-		# if idx == 0:
-		# 	idx += 1
-		# 	continue
+		if idx == 0:
+			idx += 1
+			continue
 		m1, n1 = s1
 		m2, n2 = s2
 		with tf.Session() as sess:
