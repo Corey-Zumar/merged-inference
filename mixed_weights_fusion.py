@@ -23,7 +23,7 @@ from datetime import datetime
 
 # 
 
-def fuse_distinct_matmul(graph, op1_name, op2_name):
+def fuse_distinct_matmul(sess, graph, op1_name, op2_name):
 	"""
 	op1 : str
 		The name of the first matrix multiplication operation
@@ -31,7 +31,7 @@ def fuse_distinct_matmul(graph, op1_name, op2_name):
 		The name of the second matrix multiplication operation
 	"""
 
-	with tf.Session() as sess:
+	with tf.device("/gpu:0"): 
 		tf.import_graph_def(graph, name="")
 
 		op1 = tf.get_default_graph().get_operation_by_name(op1_name)
@@ -90,7 +90,8 @@ def evaluate_matmul():
 		# 	continue
 		m1, n1 = s1
 		m2, n2 = s2
-		with tf.Session() as sess:
+		with tf.device("/gpu:0"):
+			sess = tf.Session()
 			with tf.variable_scope("TEST"):
 				w1 = tf.Variable(np.array(np.random.rand(m1, n1), dtype=np.float32))
 				w2 = tf.Variable(np.array(np.random.rand(m2, n2), dtype=np.float32))
@@ -106,7 +107,7 @@ def evaluate_matmul():
 				frozen_graph = tf.graph_util.convert_variables_to_constants(
 					sess, tf.get_default_graph().as_graph_def(), ["TEST/MatMul", "TEST/MatMul_1"])
 
-				new_op1, new_op2 = fuse_distinct_matmul(frozen_graph, "TEST/MatMul", "TEST/MatMul_1")
+				new_op1, new_op2 = fuse_distinct_matmul(sess, frozen_graph, "TEST/MatMul", "TEST/MatMul_1")
 
 				sess.run(tf.global_variables_initializer())
 		
