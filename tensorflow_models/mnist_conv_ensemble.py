@@ -212,9 +212,14 @@ def main(_):
         print('Minibatch loss: %.3f' % (l))
         print('Minibatch error: %.1f%%' % error_rate(batch_preds, batch_labels))
         print('Validation error: %.1f%%' % error_rate(eval_in_batches(val_data, sess), val_labels))
-      if step % FLAGS.save_frequency == 0:
-        print('Saving model.')
-        save_path = saver.save(sess, FLAGS.save_path)
+        if step % FLAGS.save_frequency == 0:
+            print('Saving model.')
+            save_path = saver.save(sess, FLAGS.save_path)
+    tf.saved_model.simple_save(
+        sess,
+        FLAGS.serving_model_path,
+        inputs={'inputs': x, 'labels': y_},
+        outputs={'classes': predictions['classes']})
     # Compute error over the held out test set
     print('Test error: %.1f%%' % error_rate(eval_in_batches(test_data, sess), test_labels))
     # Save final model
@@ -262,5 +267,10 @@ if __name__ == "__main__":
     default='models/model.ckpt',
     type=str,
     help='Name of prefix to save model checkpoints under.')
+  parser.add_argument(
+      '--serving_model_path',
+      default='models/model_serving/',
+      type=str,
+      help='Name of prefix to save model graph for serving at.')
   FLAGS, unparsed = parser.parse_known_args()
   tf.app.run(main=main)
