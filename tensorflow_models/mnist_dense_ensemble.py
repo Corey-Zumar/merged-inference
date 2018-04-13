@@ -213,7 +213,7 @@ if __name__ == "__main__":
     parser.add_argument(
         '--epochs',
         default=4,
-        type=int,
+        type=float,
         help='Specify number of epochs to train for')
     parser.add_argument(
         '--eval_frequency',
