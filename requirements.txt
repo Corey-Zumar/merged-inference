@@ -18,3 +18,4 @@ tk=8.6.7=h35a86e2_3
 wheel=0.30.0=py27h677a027_1
 zlib=1.2.11=hf3cbc9b_2
 tensorflow=1.7.0
+matplotlib=2.2.2
