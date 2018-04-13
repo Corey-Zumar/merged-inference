@@ -6,6 +6,7 @@ import numpy as np
 import tensorflow as tf
 import time
 import argparse
+import os
 from merged_dense import combinedDenseSameInput
 
 tf.logging.set_verbosity(tf.logging.INFO)
@@ -115,6 +116,21 @@ def dense_model_fn(placeholders):
 
 def main(_):
     # Load training and eval data
+    # determine version
+    model_version = 1
+    if os.path.exists(FLAGS.serving_model_path):
+        for f in os.listdir(FLAGS.serving_model_path):
+            max_version = 0
+            try:
+                if int(f):
+                    if max_version < int(f):
+                        max_version = int(f)
+            except ValueError:
+                continue
+        model_version = max_version + 1
+    else:
+        os.makedirs(FLAGS.serving_model_path)
+    FLAGS.serving_model_path += '/' + str(model_version) + '/'
     mnist = tf.contrib.learn.datasets.load_dataset("mnist")
     val_data = mnist.train.images[:FLAGS.validation_size]  # Returns np.array
     val_labels = np.asarray(mnist.train.labels[:FLAGS.validation_size], dtype=np.int32)
@@ -123,11 +139,12 @@ def main(_):
     train_size = train_labels.shape[0]
     test_data = mnist.test.images  # Returns np.array
     test_labels = np.asarray(mnist.test.labels, dtype=np.int32)
+    print(train_labels[0])
     print(FLAGS)
     start_time = time.time()
     with tf.Session() as sess:
-        x = tf.placeholder(tf.float32, shape=(FLAGS.batch_size, IMAGE_SIZE * IMAGE_SIZE))
-        y_ = tf.placeholder(tf.int64, shape=(FLAGS.batch_size,))
+        x = tf.placeholder(tf.float32, shape=(None, IMAGE_SIZE * IMAGE_SIZE))
+        y_ = tf.placeholder(tf.int64, shape=(None,))
         prob = tf.placeholder_with_default(1.0, shape=())
         loss, predictions, train_op, eval_metric_ops, eval_in_batches = dense_model_fn({'x' : x, 'labels' : y_, 'dropout' : prob})
 
