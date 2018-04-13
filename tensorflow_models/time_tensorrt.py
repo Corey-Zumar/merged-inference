@@ -53,12 +53,21 @@ def printStats(graphName,timings,batch_size):
   print("images/s : %.1f +/- %.1f, s/batch: %.5f +/- %.5f"%(avgSpeed,stdSpeed,avgTime,stdTime))
   print("RES, %s, %s, %.2f, %.2f, %.5f, %.5f"%(graphName,batch_size,avgSpeed,stdSpeed,avgTime,stdTime))
 
-def getFP32(batch_size=128,workspace_size=1<<30):
+def getFP32(batch_size=64,workspace_size=1<<30):
   trt_graph = trt.create_inference_graph(getGraph(), [ "classes"],
                                          max_batch_size=batch_size,
                                          max_workspace_size_bytes=workspace_size,
                                          precision_mode="FP32")  # Get optimized graph
   with gfile.FastGFile("conv_ensemble_TRTFP32.pb",'wb') as f:
+    f.write(trt_graph.SerializeToString())
+  return trt_graph
+
+def getFP16(batch_size=64,workspace_size=1<<30):
+  trt_graph = trt.create_inference_graph(getGraph(), [ "classes"],
+                                         max_batch_size=batch_size,
+                                         max_workspace_size_bytes=workspace_size,
+                                         precision_mode="FP16")  # Get optimized graph
+  with gfile.FastGFile("conv_ensemble_TRTFP16.pb",'wb') as f:
     f.write(trt_graph.SerializeToString())
   return trt_graph
 
@@ -77,7 +86,7 @@ def run_graph(gdef, dumm_inp):
     val = sess.run(out, {inp: dumm_inp})
   return val
 
-def timeGraph(gdef,batch_size=128,num_loops=100,dummy_input=None,timelineName=None):
+def timeGraph(gdef,batch_size=64,num_loops=100,dummy_input=None,timelineName=None):
   tf.logging.info("Starting execution")
   gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.50)
   tf.reset_default_graph()
@@ -127,7 +136,7 @@ def timeGraph(gdef,batch_size=128,num_loops=100,dummy_input=None,timelineName=No
       tend=time.time()
       for i in range(20):
         tstart=time.time()
-        print([op for op in g.get_operations()])
+        # print([op for op in g.get_operations()])
         valt = sess.run(outlist,options=run_options,run_metadata=rmArr[i][0], feed_dict={"import/labels:0":np.random.randint(10, size=64)})
         tend=time.time()
         rmArr[i][1]=(int(tstart*1.e6),int(tend*1.e6))
@@ -170,10 +179,26 @@ tshape[0] = batch_size
 tnhwcbatch = np.tile(t[0],(batch_size,1,1,1))
 dummy_input = tnhwcbatch
 
+native = True
+FP32 = True
+FP16 = True
 
-timelineName = "FP32Timeline.json"
-# run_graph(getFP32(batch_size,wsize), dummy_input)
-timings,comp,valfp32,mdstats=timeGraph(getFP32(batch_size,wsize),batch_size,num_loops,
-                               dummy_input,timelineName)
-printStats("TRT-FP32",timings,batch_size)
-printStats("TRT-FP32RS",mdstats,batch_size)
+if native:
+  timelineName="NativeTimeline.json"
+  timings,comp,valnative,mdstats=timeGraph(getGraph(),batch_size,
+                                   num_loops,dummy_input,timelineName)
+  printStats("Native",timings,batch_size)
+  printStats("NativeRS",mdstats,batch_size)
+if FP32:
+  timelineName="FP32Timeline.json"
+  timings,comp,valfp32,mdstats=timeGraph(getFP32(batch_size,wsize),batch_size,num_loops,
+                                 dummy_input,timelineName)
+  printStats("TRT-FP32",timings,batch_size)
+  printStats("TRT-FP32RS",mdstats,batch_size)
+if FP16:
+  timelineName="FP16Timeline.json"
+  timings,comp,valfp16,mdstats=timeGraph(getFP16(batch_size,wsize),batch_size,num_loops,
+                                 dummy_input,timelineName)
+  printStats("TRT-FP16",timings,batch_size)
+  printStats("TRT-FP16RS",mdstats,batch_size)
+# add INT8
