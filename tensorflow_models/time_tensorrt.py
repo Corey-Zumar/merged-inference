@@ -8,8 +8,9 @@ from tensorflow.core.protobuf import config_pb2 as cpb2
 from tensorflow.python.framework import ops as ops
 from tensorflow.python.framework import importer as importer
 from tensorflow.contrib.learn.python.learn.utils import input_fn_utils
+import random
 
-# TODOs: fix imports, remove run_graph, add back FP16 etc, parameterize batch size, export dir, filename
+# TODOs: fix imports, remove run_graph, add back FP16 etc, parameterize (batch size, export dir, filename), remove 'labels' from model 
 # Note: if you encounter an error with libcupti.so.9.0, just append /usr/local/cuda/extras/CUPTI/lib64 to your LD_LIBRARY_PATH
 
 export_dir = "models/model_serving/"
@@ -84,7 +85,6 @@ def timeGraph(gdef,batch_size=128,num_loops=100,dummy_input=None,timelineName=No
   if dummy_input is None:
     dummy_input = np.random.random_sample((batch_size, 28, 28, 1))
   outlist=[]
-  # outlist=["classes"]
   with g.as_default():
     inc=tf.constant(dummy_input, dtype=tf.float32)
     dataset=tf.data.Dataset.from_tensors(inc)
@@ -127,20 +127,21 @@ def timeGraph(gdef,batch_size=128,num_loops=100,dummy_input=None,timelineName=No
       tend=time.time()
       for i in range(20):
         tstart=time.time()
-        valt = sess.run(outlist,options=run_options,run_metadata=rmArr[i][0])
+        print([op for op in g.get_operations()])
+        valt = sess.run(outlist,options=run_options,run_metadata=rmArr[i][0], feed_dict={"import/labels:0":np.random.randint(10, size=64)})
         tend=time.time()
         rmArr[i][1]=(int(tstart*1.e6),int(tend*1.e6))
-      with gfile.FastGFile(timelineName,"a") as tlf:
-        tlf.write(mergeTraceStr(rmArr))
+      # with gfile.FastGFile(timelineName,"a") as tlf:
+      #   tlf.write(mergeTraceStr(rmArr))
     else:
       for i in range(20):
-        valt = sess.run(outlist)
+        valt = sess.run(outlist, feed_dict={"import/labels:0":np.random.randint(10, size=64)})
     tf.logging.info("Warmup done. Starting real timing")
     num_iters=50
     for i in range(num_loops):
       tstart=time.time()
       for k in range(num_iters):
-        val = sess.run(outlist)
+        val = sess.run(outlist, feed_dict={"import/labels:0":np.random.randint(10, size=64)})
       timings.append((time.time()-tstart)/float(num_iters))
       print("iter ",i," ",timings[-1])
     comp=sess.run(tf.reduce_all(tf.equal(val[0],valt[0])))
@@ -176,4 +177,3 @@ timings,comp,valfp32,mdstats=timeGraph(getFP32(batch_size,wsize),batch_size,num_
                                dummy_input,timelineName)
 printStats("TRT-FP32",timings,batch_size)
 printStats("TRT-FP32RS",mdstats,batch_size)
-
