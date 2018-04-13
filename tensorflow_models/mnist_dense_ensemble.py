@@ -119,9 +119,9 @@ def main(_):
     # determine version
     model_version = 1
     if os.path.exists(FLAGS.serving_model_path):
+        max_version = 0
         for f in os.listdir(FLAGS.serving_model_path):
             print(f)
-            max_version = 0
             try:
                 if int(f):
                     if max_version < int(f):
