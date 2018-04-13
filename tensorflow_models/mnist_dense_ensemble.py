@@ -143,7 +143,7 @@ def main(_):
     start_time = time.time()
     with tf.Session() as sess:
         x = tf.placeholder(tf.float32, shape=(None, IMAGE_SIZE * IMAGE_SIZE))
-        y_ = tf.placeholder(tf.uint8, shape=(None,))
+        y_ = tf.placeholder(tf.int32, shape=(None,))
         prob = tf.placeholder_with_default(1.0, shape=())
         loss, predictions, train_op, eval_metric_ops, eval_in_batches = dense_model_fn({'x' : x, 'labels' : y_, 'dropout' : prob})
 
