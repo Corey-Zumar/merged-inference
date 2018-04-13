@@ -8,6 +8,7 @@ import time
 import argparse
 import os
 from merged_dense import combinedDenseSameInput
+import time
 
 tf.logging.set_verbosity(tf.logging.INFO)
 
@@ -185,7 +186,9 @@ def main(_):
             inputs={'inputs': x, 'labels': y_},
             outputs={'classes': predictions['classes']})
         # Compute error over the held out test set
+        start_time = time.time()
         print('Test error: %.1f%%' % error_rate(eval_in_batches(test_data, sess), test_labels))
+        print('Evaluation time:', time.time() - start_time)
         # Save final model
         save_path = saver.save(sess, FLAGS.save_path)
 
