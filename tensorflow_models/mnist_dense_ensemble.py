@@ -133,13 +133,12 @@ def main(_):
     FLAGS.serving_model_path += '/' + str(model_version) + '/'
     mnist = tf.contrib.learn.datasets.load_dataset("mnist")
     val_data = mnist.train.images[:FLAGS.validation_size]  # Returns np.array
-    val_labels = np.asarray(mnist.train.labels[:FLAGS.validation_size], dtype=np.int32)
+    val_labels = np.asarray(mnist.train.labels[:FLAGS.validation_size], dtype=np.uint8)
     train_data = mnist.train.images[FLAGS.validation_size:]
-    train_labels = np.asarray(mnist.train.labels[FLAGS.validation_size:], dtype=np.int32)
+    train_labels = np.asarray(mnist.train.labels[FLAGS.validation_size:], dtype=np.uint8)
     train_size = train_labels.shape[0]
     test_data = mnist.test.images  # Returns np.array
-    test_labels = np.asarray(mnist.test.labels, dtype=np.int32)
-    print(train_labels[0])
+    test_labels = np.asarray(mnist.test.labels, dtype=np.uint8)
     print(FLAGS)
     start_time = time.time()
     with tf.Session() as sess:

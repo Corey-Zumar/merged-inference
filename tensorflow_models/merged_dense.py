@@ -36,6 +36,8 @@ class CombinedDenseSameInput(base.Layer):
         self.dense_layers = layers_to_combine
         self.dense_kernels = [d.add_variable('kernel', [self.dense_layers[0].input_spec.axes[-1], d.units])
                               for d in self.dense_layers]
+        self.bias_combined = False
+        self.activations_combined = False
 
     def build(self, input_shape):
         input_shape = tensor_shape.TensorShape(input_shape)
@@ -68,30 +70,26 @@ class CombinedDenseSameInput(base.Layer):
             outputs = standard_ops.matmul(inputs, combined_kernel)
         prev = None
         output_ops = []
-        bias_combined = False
-        activations_combined = False
+
         if all([d.use_bias for d in self.dense_layers]):
             combined_bias = tf.concat(axis=0, values=[d.bias for d in self.dense_layers])
             outputs = nn.bias_add(outputs, combined_bias)
-            bias_combined = True
+            self.bias_combined = True
         activations = {d.activation for d in self.dense_layers}
         if None not in activations and len(activations) == 1:
             outputs = activations.pop()(outputs)
-            activations_combined = True
+            self.activations_combined = True
         for d in self.dense_layers:
             if prev is None:
                 layer_output = outputs[:, :d.units]
             else:
                 layer_output = outputs[:, prev:(prev+d.units)]
             prev = d.units
-            if d.use_bias and not bias_combined:
-                print(d.bias)
-                print(layer_output)
+            if d.use_bias and not self.bias_combined:
                 layer_output = nn.bias_add(layer_output, d.bias)
-            if d.activation is not None and not activations_combined:
+            if d.activation is not None and not self.activations_combined:
                 layer_output = d.activation(layer_output)
             output_ops.append(layer_output)
-        # this can be significantly more optimized - we could bias_add all at once
         return output_ops
 
     def compute_output_shape(self, input_shape):
@@ -102,6 +100,9 @@ class CombinedDenseSameInput(base.Layer):
               'The innermost dimension of input_shape must be defined, but saw: %s'
               % input_shape)
         return input_shape[:-1].concatenate(self.units)
+
+    def score(self):
+        return len(self.dense_layers) + (1 if self.bias_combined else 0) + (1 if self.activations_combined else 0)
 
 
 def combinedDenseSameInput(inputs, layers_to_combine, trainable=True, name=None, reuse=None):
