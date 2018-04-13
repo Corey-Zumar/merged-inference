@@ -120,6 +120,7 @@ def main(_):
     model_version = 1
     if os.path.exists(FLAGS.serving_model_path):
         for f in os.listdir(FLAGS.serving_model_path):
+            print(f)
             max_version = 0
             try:
                 if int(f):
@@ -128,6 +129,7 @@ def main(_):
             except ValueError:
                 continue
         model_version = max_version + 1
+        print(model_version)
     else:
         os.makedirs(FLAGS.serving_model_path)
     FLAGS.serving_model_path += '/' + str(model_version) + '/'
