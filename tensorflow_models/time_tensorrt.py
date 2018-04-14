@@ -4,12 +4,8 @@ import time
 from tensorflow.contrib import tensorrt as trt
 from tensorflow.python.platform import gfile
 from tensorflow.python.saved_model import tag_constants
-from tensorflow.core.protobuf import config_pb2 as cpb2
-from tensorflow.python.framework import ops as ops
-from tensorflow.python.framework import importer as importer
-from tensorflow.contrib.learn.python.learn.utils import input_fn_utils
 
-# TODOs: fix imports, remove run_graph, parameterize (batch size, export dir, filename), remove 'labels' from model 
+# TODOs: parameterize (batch size, export dir, filename), remove 'labels' from model 
 # Note: if you encounter an error with libcupti.so.9.0, just append /usr/local/cuda/extras/CUPTI/lib64 to your LD_LIBRARY_PATH
 # Note: INT8 probably won't work
 
@@ -28,25 +24,6 @@ batch_size = 64
 num_loops = 20
 workspace_size = 1 << 10
 wsize = workspace_size << 20
-
-
-def read_tensor_from_image_file(file_name, input_height = 28, input_width = 28,
-                                input_mean = 0, input_std = 255):
-  """ Read a jpg image file and return a tensor """
-  input_name = "file_reader"
-  output_name = "normalized"
-  file_reader = tf.read_file(file_name, input_name)
-  image_reader = tf.image.decode_png(file_reader, channels = 1,
-                                         name = 'jpg_reader')
-  float_caster = tf.cast(image_reader, tf.float32)
-  dims_expander = tf.expand_dims(float_caster, 0);
-  resized = tf.image.resize_bilinear(dims_expander, [input_height, input_width])
-  normalized = tf.divide(tf.subtract(resized, [input_mean]), [input_std])
-  sess = tf.Session(config = tf.ConfigProto(gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction = gpu_fraction)))
-  result = sess.run([normalized, tf.transpose(normalized, perm = (0, 3, 1, 2))])
-  del sess
-
-  return result
 
 def getGraph():
   with tf.Session() as sess:
