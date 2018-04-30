@@ -28,23 +28,16 @@ def dense_model_fn(placeholders):
     y_ = placeholders['labels']
     prob = placeholders['dropout']
     processed_inputs = []
-    if FLAGS.preprocess_optimized:
-        with tf.variable_scope('preprocessing') as scope:
-            x_norm = tf.subtract(x, tf.reduce_mean(x, axis=0))
-            processed_inputs.append(x_norm)
-    else:
-        with tf.variable_scope('preprocessing') as scope:
-            for i in range(FLAGS.n_ensemble):
-                with tf.variable_scope('preprocessing_' + str(i)):
-                    x_norm = tf.subtract(x, tf.reduce_mean(x, axis=0))
-                    processed_inputs.append(x_norm)
+    with tf.variable_scope('preprocessing') as scope:
+        x_norm = tf.subtract(x, tf.reduce_mean(x, axis=0))
+        processed_inputs.append(x_norm)
     # Dense Layer
     # Densely connected layer with 1024 neurons
     # Input Tensor Shape: [FLAGS.batch_size, 7 * 7 * 64]
     # Output Tensor Shape: [FLAGS.batch_size, 1024]
     dense_layers_1 = []
     for i in range(FLAGS.n_ensemble):
-        input_tensor = processed_inputs[i] if FLAGS.preprocess_optimized else processed_inputs[0]
+        input_tensor = processed_inputs[0]
         with tf.variable_scope('dense1_' + str(i)) as scope:
             if FLAGS.combine_dense:
                 d = tf.layers.Dense(units=1024, activation=tf.nn.relu, name=scope.name)
