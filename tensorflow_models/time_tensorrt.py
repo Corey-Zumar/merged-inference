@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+"""Times the image/s throughput and batch latency with and without TensorRT"""
 import argparse
 import numpy as np
 import os
@@ -9,9 +10,9 @@ from tensorflow.contrib import tensorrt as trt
 from tensorflow.python.platform import gfile
 from tensorflow.python.saved_model import tag_constants
 
-# TODOs: parameterize filenames, remove 'labels' from model 
-# Note: if you encounter an error with libcupti.so.9.0, just append /usr/local/cuda/extras/CUPTI/lib64 to your LD_LIBRARY_PATH
-# Note: INT8 probably won't work
+# TODO: remove 'labels' from model 
+# Note: if you encounter an error with libcupti.so.9.0, just append
+#       /usr/local/cuda/extras/CUPTI/lib64 to your LD_LIBRARY_PATH
 
 flags = None
 
@@ -48,7 +49,7 @@ def getFP32(batch_size=64, workspace_size=1<<30):
   with gfile.FastGFile(fp32_file, 'wb') as f:
     f.write(trt_graph.SerializeToString())
   if FLAGS.logging_enabled:
-    writer = tf.summary.FileWriter(FLAGS.log_dir_prefix + "32")
+    writer = tf.summary.FileWriter(FLAGS.log_dir + "32")
     writer.add_graph(trt_graph)
   return trt_graph
 
@@ -60,23 +61,8 @@ def getFP16(batch_size=64, workspace_size=1<<30):
   with gfile.FastGFile(fp16_file, 'wb') as f:
     f.write(trt_graph.SerializeToString())
   if FLAGS.logging_enabled:
-    writer = tf.summary.FileWriter(FLAGS.log_dir_prefix + "16")
+    writer = tf.summary.FileWriter(FLAGS.log_dir + "16")
     writer.add_graph(trt_graph)
-  return trt_graph
-
-def getINT8CalibGraph(batch_size=64, workspace_size=1<<30):
-  trt_graph = trt.create_inference_graph(getGraph(), [ "classes"],
-                                         max_batch_size=batch_size,
-                                         max_workspace_size_bytes=workspace_size,
-                                         precision_mode="INT8")
-  with gfile.FastGFile(int8_calib_file,'wb') as f:
-    f.write(trt_graph.SerializeToString())
-  return trt_graph
-
-def getINT8InferenceGraph(calibGraph):
-  trt_graph = trt.calib_graph_to_infer_graph(calibGraph)
-  with gfile.FastGFile(int8_infer_file, 'wb') as f:
-    f.write(trt_graph.SerializeToString())
   return trt_graph
 
 def timeGraph(gdef, batch_size=64, num_loops=100, dummy_input=None):
@@ -143,94 +129,86 @@ if __name__ == "__main__":
       '--native',
       default=True,
       type=bool,
-      help='PLACEHOLDER',
+      help='Evaluate native model performance.',
       metavar='')
   parser.add_argument(
       '--FP32',
       default=True,
       type=bool,
-      help='PLACEHOLDER',
+      help='Evaluate model performance with TensorRT and 32-bit floats.',
       metavar='')
   parser.add_argument(
       '--FP16',
       default=True,
       type=bool,
-      help='PLACEHOLDER',
-      metavar='')
-  parser.add_argument(
-      '--INT8',
-      default=False,
-      type=bool,
-      help='PLACEHOLDER',
+      help='Evaluate model performance with TensorRT and 16-bit floats.',
       metavar='')
   parser.add_argument(
       '--batch_size',
       default=64,
       type=int,
-      help='specify batch size for evaluation',
+      help='Batch size for evaluation.',
       metavar='')
   parser.add_argument(
       '--num_loops',
       default=1000,
       type=int,
-      help='PLACEHOLDER',
+      help='Number of runs to evaluate.',
       metavar='')
   parser.add_argument(
       '--seed',
       default=0,
       type=int,
-      help='PLACEHOLDER',
+      help='Random seed to generate the test inputs.',
       metavar='')
   parser.add_argument(
       '--gpu_fraction',
       default=0.75,
       type=float,
-      help='PLACEHOLDER',
+      help='Fraction of the GPU to use.',
       metavar='')
   parser.add_argument(
       '--logging_enabled',
       default=True,
       type=bool,
-      help='PLACEHOLDER',
+      help='Set to True to enable logging (used for TensorBoard). Set to False to disable logging.',
       metavar='')
   parser.add_argument(
       '--num_ensembles',
       default=4,
       type=int,
-      help='PLACEHOLDER',
+      help='Number of ensembles in the model being evaluated. Used only with dense model.',
       metavar='')
   parser.add_argument(
-      '--log_dir_prefix',
+      '--log_dir',
       default='logs/',
       type=str,
-      help='PLACEHOLDER',
+      help='Location of logs (used for TensorBoard) directory. End with \'/\'.',
       metavar='')
   parser.add_argument(
       '--conv_or_dense',
       default=True,
       type=bool,
-      help='PLACEHOLDER',
+      help='Set to True to evaluate convolutional model. Set to False to evalue dense model.',
       metavar='')
   parser.add_argument(
       '--model_path',
       default='models/model_serving/',
       type=str,
-      help='name of prefix to save model graph for serving at',
+      help='Location of model to optimize and time.',
       metavar='')
   FLAGS, _ = parser.parse_known_args()
 
   prefix = None
   if FLAGS.conv_or_dense:
-    prefix = "conv"
+    prefix = "models/conv"
   else:
-    prefix = "dense"
+    prefix = "models/dense"
 
   # Filenames for intermediate models to be saved at
   graph_file = prefix + "_ensemble.pb"
   fp32_file = prefix + "_ensemble_TRTFP32.pb"
   fp16_file = prefix + "_ensemble_TRTFP16.pb"
-  int8_calib_file = prefix + "_ensemble_TRTINT8Calib.pb"
-  int8_infer_file = prefix + "_ensemble_TRTINT8.pb"
 
   np.random.seed(FLAGS.seed)
   dummy_input = None
@@ -249,7 +227,7 @@ if __name__ == "__main__":
     timings, valnative = timeGraph(getGraph(), FLAGS.batch_size,
                                         FLAGS.num_loops, dummy_input)
     if FLAGS.logging_enabled:
-      writer = tf.summary.FileWriter(FLAGS.log_dir_prefix + "native")
+      writer = tf.summary.FileWriter(FLAGS.log_dir + "native")
       writer.add_graph(getGraph())
     printStats("Native", timings, FLAGS.batch_size)
   if FLAGS.FP32:
@@ -260,13 +238,3 @@ if __name__ == "__main__":
     timings, valfp16 = timeGraph(getFP16(FLAGS.batch_size, wsize), FLAGS.batch_size, FLAGS.num_loops,
                                       dummy_input)
     printStats("TRT-FP16", timings, FLAGS.batch_size)
-  if FLAGS.INT8:
-    calibGraph = getINT8CalibGraph(FLAGS.batch_size, wsize)
-    print("Running Calibration")
-    timings, _ = timeGraph(calibGraph, FLAGS.batch_size, 1, dummy_input)
-    print("Creating inference graph")
-    int8Graph = getINT8InferenceGraph(calibGraph)
-    del calibGraph
-    timings, valint8 = timeGraph(int8Graph, FLAGS.batch_size,
-                                      FLAGS.num_loops, dummy_input)
-    printStats("TRT-INT8", timings, FLAGS.batch_size)
