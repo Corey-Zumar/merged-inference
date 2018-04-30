@@ -133,7 +133,7 @@ def main(_):
         print(model_version)
     else:
         os.makedirs(FLAGS.serving_model_path)
-    FLAGS.serving_model_path += '/' + str(model_version) + '/'
+    FLAGS.serving_model_path += str(model_version) + '/'
     mnist = tf.contrib.learn.datasets.load_dataset("mnist")
     val_data = mnist.train.images[:FLAGS.validation_size]  # Returns np.array
     val_labels = np.asarray(mnist.train.labels[:FLAGS.validation_size], dtype=np.uint8)
@@ -145,8 +145,8 @@ def main(_):
     print(FLAGS)
     start_time = time.time()
     with tf.Session() as sess:
-        x = tf.placeholder(tf.float32, shape=(None, IMAGE_SIZE * IMAGE_SIZE))
-        y_ = tf.placeholder(tf.int32, shape=(None,))
+        x = tf.placeholder(tf.float32, shape=(None, IMAGE_SIZE * IMAGE_SIZE), name='input')
+        y_ = tf.placeholder(tf.int32, shape=(None,), name='labels')
         prob = tf.placeholder_with_default(1.0, shape=())
         loss, predictions, train_op, eval_metric_ops, eval_in_batches = dense_model_fn({'x' : x, 'labels' : y_, 'dropout' : prob})
 
