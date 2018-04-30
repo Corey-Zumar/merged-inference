@@ -95,10 +95,17 @@ def timeGraph(gdef, batch_size=64, num_loops=100, dummy_input=None):
     dataset = dataset.repeat()
     iterator = dataset.make_one_shot_iterator()
     next_element = iterator.get_next()
+    # FOR CONV
+    # out = tf.import_graph_def(
+    #         graph_def = gdef,
+    #         input_map = {"input": next_element},
+    #         return_elements = ["labels"]
+    # )
+    # FOR DENSE
     out = tf.import_graph_def(
             graph_def = gdef,
-            input_map = {"input": next_element},
-            return_elements = ["labels"]
+            input_map = {"mnist_inputs004": next_element},
+            return_elements = ["mnist_labels"]
     )
     out = out[0].outputs[0]
     outlist.append(out)
@@ -111,13 +118,19 @@ def timeGraph(gdef, batch_size=64, num_loops=100, dummy_input=None):
     tf.logging.info("Starting Warmup cycle")
     rmArr = [[tf.RunMetadata(), 0] for x in range(20)]
     for i in range(20):
-      valt = sess.run(outlist, feed_dict = {"import/labels:0": dummy2})#np.random.randint(10, size = 64)})
+      # FOR CONV
+      # valt = sess.run(outlist, feed_dict = {"import/labels:0": dummy2})#np.random.randint(10, size = 64)})
+      # FOR DENSE
+      valt = sess.run(outlist, feed_dict = {"import/mnist_labels:0": dummy2})#np.random.randint(10, size = 64)})      
     tf.logging.info("Warmup done. Starting real timing")
     num_iters = 50
     for i in range(num_loops):
       tstart = time.time()
       for k in range(num_iters):
-        val = sess.run(outlist, feed_dict = {"import/labels:0": dummy2})#np.random.randint(10, size = 64)})
+        # FOR CONV
+        # val = sess.run(outlist, feed_dict = {"import/labels:0": dummy2})#np.random.randint(10, size = 64)})
+        # FOR DENSE
+        val = sess.run(outlist, feed_dict = {"import/mnist_labels:0": dummy2})#np.random.randint(10, size = 64)})
       timings.append((time.time() - tstart) / float(num_iters))
       # print("iter ", i, " ", timings[-1])
     sess.close()

@@ -220,6 +220,8 @@ def main(_):
         FLAGS.serving_model_path,
         inputs={'inputs': x, 'labels': y_},
         outputs={'classes': predictions['classes']})
+    summary_path = FLAGS.serving_model_path + '/summary/'
+    tf.summary.FileWriter(summary_path, sess.graph)
     # Compute error over the held out test set
     print('Test error: %.1f%%' % error_rate(eval_in_batches(test_data, sess), test_labels))
     # Save final model

@@ -157,7 +157,7 @@ def main(_):
                            shape=(None, IMAGE_SIZE * IMAGE_SIZE),
                            name='mnist_inputs00' + str(FLAGS.n_ensemble))
         print(x.name)
-        y_ = tf.placeholder(tf.int32, shape=(None,), name='mnist_labels')
+        y_ = tf.placeholder(tf.int64, shape=(FLAGS.batch_size,), name='mnist_labels')
         prob = tf.placeholder_with_default(1.0, shape=(), name='dropout_prob')
         loss, predictions, train_op, eval_metric_ops, eval_in_batches = dense_model_fn({'x' : x, 'labels' : y_, 'dropout' : prob})
 
@@ -257,5 +257,10 @@ if __name__ == "__main__":
         '--combine_dense',
         action='store_true',
         help='Combine dense layers into a single computational node.')
+    parser.add_argument(
+        '--preprocess_optimized',
+        default=False,
+        type=bool,
+        help='PLACEHOLDER.')
     FLAGS, unparsed = parser.parse_known_args()
     tf.app.run(main=main)
