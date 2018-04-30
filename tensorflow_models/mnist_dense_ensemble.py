@@ -4,7 +4,6 @@ from __future__ import print_function
 
 import numpy as np
 import tensorflow as tf
-import time
 import argparse
 import os
 from merged_dense import combinedDenseSameInput
@@ -15,7 +14,6 @@ tf.logging.set_verbosity(tf.logging.INFO)
 IMAGE_SIZE = 28
 NUM_LABELS = 10
 FLAGS = None
-
 
 def error_rate(predictions, labels):
     """Return the error rate based on dense predictions and sparse labels."""
@@ -29,22 +27,33 @@ def dense_model_fn(placeholders):
     x = placeholders['x']
     y_ = placeholders['labels']
     prob = placeholders['dropout']
-
+    processed_inputs = []
+    if FLAGS.preprocess_optimized:
+        with tf.variable_scope('preprocessing') as scope:
+            x_norm = tf.subtract(x, tf.reduce_mean(x, axis=0))
+            processed_inputs.append(x_norm)
+    else:
+        with tf.variable_scope('preprocessing') as scope:
+            for i in range(FLAGS.n_ensemble):
+                with tf.variable_scope('preprocessing_' + str(i)):
+                    x_norm = tf.subtract(x, tf.reduce_mean(x, axis=0))
+                    processed_inputs.append(x_norm)
     # Dense Layer
     # Densely connected layer with 1024 neurons
     # Input Tensor Shape: [FLAGS.batch_size, 7 * 7 * 64]
     # Output Tensor Shape: [FLAGS.batch_size, 1024]
     dense_layers_1 = []
     for i in range(FLAGS.n_ensemble):
+        input_tensor = processed_inputs[i] if FLAGS.preprocess_optimized else processed_inputs[0]
         with tf.variable_scope('dense1_' + str(i)) as scope:
             if FLAGS.combine_dense:
                 d = tf.layers.Dense(units=1024, activation=tf.nn.relu, name=scope.name)
-                d.apply(x)
+                d.apply(input_tensor)
                 dense_layers_1.append(d)
             else:
-                dense_layers_1.append(tf.layers.dense(inputs=x, units=1024, activation=tf.nn.relu, name=scope.name))
+                dense_layers_1.append(tf.layers.dense(inputs=input_tensor, units=1024, activation=tf.nn.relu, name=scope.name))
     if FLAGS.combine_dense:
-        dense_layers_1 = combinedDenseSameInput(inputs=x, layers_to_combine=dense_layers_1)
+        dense_layers_1 = combinedDenseSameInput(inputs=processed_inputs[0], layers_to_combine=dense_layers_1)
     dense_layers_2 = []
     for i in range(FLAGS.n_ensemble):
         with tf.variable_scope('dense2_' + str(i)) as scope:
@@ -122,7 +131,6 @@ def main(_):
     if os.path.exists(FLAGS.serving_model_path):
         max_version = 0
         for f in os.listdir(FLAGS.serving_model_path):
-            print(f)
             try:
                 if int(f):
                     if max_version < int(f):
@@ -130,7 +138,7 @@ def main(_):
             except ValueError:
                 continue
         model_version = max_version + 1
-        print(model_version)
+        print('Creating model version#:', model_version)
     else:
         os.makedirs(FLAGS.serving_model_path)
     FLAGS.serving_model_path += '/' + str(model_version) + '/'
@@ -145,9 +153,12 @@ def main(_):
     print(FLAGS)
     start_time = time.time()
     with tf.Session() as sess:
-        x = tf.placeholder(tf.float32, shape=(None, IMAGE_SIZE * IMAGE_SIZE))
-        y_ = tf.placeholder(tf.int32, shape=(None,))
-        prob = tf.placeholder_with_default(1.0, shape=())
+        x = tf.placeholder(tf.float32,
+                           shape=(None, IMAGE_SIZE * IMAGE_SIZE),
+                           name='mnist_inputs00' + str(FLAGS.n_ensemble))
+        print(x.name)
+        y_ = tf.placeholder(tf.int32, shape=(None,), name='mnist_labels')
+        prob = tf.placeholder_with_default(1.0, shape=(), name='dropout_prob')
         loss, predictions, train_op, eval_metric_ops, eval_in_batches = dense_model_fn({'x' : x, 'labels' : y_, 'dropout' : prob})
 
         # Initialize variables
@@ -185,6 +196,8 @@ def main(_):
             FLAGS.serving_model_path,
             inputs={'inputs': x, 'labels': y_},
             outputs={'classes': predictions['classes']})
+        summary_path = FLAGS.serving_model_path + '/summary/'
+        tf.summary.FileWriter(summary_path, sess.graph)
         # Compute error over the held out test set
         start_time = time.time()
         print('Test error: %.1f%%' % error_rate(eval_in_batches(test_data, sess), test_labels))
