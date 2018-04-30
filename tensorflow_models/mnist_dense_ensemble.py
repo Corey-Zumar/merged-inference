@@ -141,7 +141,7 @@ def main(_):
         print('Creating model version#:', model_version)
     else:
         os.makedirs(FLAGS.serving_model_path)
-    FLAGS.serving_model_path += '/' + str(model_version) + '/'
+    FLAGS.serving_model_path += str(model_version) + '/'
     mnist = tf.contrib.learn.datasets.load_dataset("mnist")
     val_data = mnist.train.images[:FLAGS.validation_size]  # Returns np.array
     val_labels = np.asarray(mnist.train.labels[:FLAGS.validation_size], dtype=np.uint8)
