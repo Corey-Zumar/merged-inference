@@ -27,26 +27,26 @@ def dense_model_fn(placeholders):
     x = placeholders['x']
     y_ = placeholders['labels']
     prob = placeholders['dropout']
-    processed_inputs = []
     with tf.variable_scope('preprocessing') as scope:
         x_norm = tf.subtract(x, tf.reduce_mean(x, axis=0))
-        processed_inputs.append(x_norm)
+    input_shape = tf.shape(x_norm)[0]
+    # THIS WILL BREAK IF THE BATCH SIZE IS NOT DIVISIBLE BY THE NUMBER OF ENSEMBLES.
+    x_outputs = tf.split(x_norm, [input_shape / FLAGS.n_ensemble for _ in range(FLAGS.n_ensemble)])
     # Dense Layer
     # Densely connected layer with 1024 neurons
     # Input Tensor Shape: [FLAGS.batch_size, 7 * 7 * 64]
     # Output Tensor Shape: [FLAGS.batch_size, 1024]
     dense_layers_1 = []
     for i in range(FLAGS.n_ensemble):
-        input_tensor = processed_inputs[0]
         with tf.variable_scope('dense1_' + str(i)) as scope:
             if FLAGS.combine_dense:
                 d = tf.layers.Dense(units=1024, activation=tf.nn.relu, name=scope.name)
-                d.apply(input_tensor)
+                d.apply(x_outputs[i])
                 dense_layers_1.append(d)
             else:
-                dense_layers_1.append(tf.layers.dense(inputs=input_tensor, units=1024, activation=tf.nn.relu, name=scope.name))
+                dense_layers_1.append(tf.layers.dense(inputs=x_outputs[i], units=1024, activation=tf.nn.relu, name=scope.name))
     if FLAGS.combine_dense:
-        dense_layers_1 = combinedDenseSameInput(inputs=processed_inputs[0], layers_to_combine=dense_layers_1)
+        dense_layers_1 = combinedDenseSameInput(inputs=x_norm, layers_to_combine=dense_layers_1)
     dense_layers_2 = []
     for i in range(FLAGS.n_ensemble):
         with tf.variable_scope('dense2_' + str(i)) as scope:
@@ -134,7 +134,7 @@ def main(_):
         print('Creating model version#:', model_version)
     else:
         os.makedirs(FLAGS.serving_model_path)
-    FLAGS.serving_model_path += str(model_version) + '/'
+    FLAGS.serving_model_path += '/' + str(model_version) + '/'
     mnist = tf.contrib.learn.datasets.load_dataset("mnist")
     val_data = mnist.train.images[:FLAGS.validation_size]  # Returns np.array
     val_labels = np.asarray(mnist.train.labels[:FLAGS.validation_size], dtype=np.uint8)
@@ -150,7 +150,7 @@ def main(_):
                            shape=(None, IMAGE_SIZE * IMAGE_SIZE),
                            name='mnist_inputs00' + str(FLAGS.n_ensemble))
         print(x.name)
-        y_ = tf.placeholder(tf.int64, shape=(FLAGS.batch_size,), name='mnist_labels')
+        y_ = tf.placeholder(tf.int32, shape=(None,), name='mnist_labels')
         prob = tf.placeholder_with_default(1.0, shape=(), name='dropout_prob')
         loss, predictions, train_op, eval_metric_ops, eval_in_batches = dense_model_fn({'x' : x, 'labels' : y_, 'dropout' : prob})
 
@@ -250,10 +250,5 @@ if __name__ == "__main__":
         '--combine_dense',
         action='store_true',
         help='Combine dense layers into a single computational node.')
-    parser.add_argument(
-        '--preprocess_optimized',
-        default=False,
-        type=bool,
-        help='PLACEHOLDER.')
     FLAGS, unparsed = parser.parse_known_args()
     tf.app.run(main=main)
