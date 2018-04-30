@@ -30,8 +30,6 @@ def getGraph():
     return graph_def
 
 def printStats(graphName, timings, batch_size):
-  if timings is None:
-    return
   times = np.array(timings)
   speeds = batch_size / times
   avgTime = np.mean(timings)
@@ -46,7 +44,7 @@ def getFP32(batch_size=64, workspace_size=1<<30):
   trt_graph = trt.create_inference_graph(getGraph(), [ "classes"],
                                            max_batch_size = batch_size,
                                            max_workspace_size_bytes = workspace_size,
-                                           precision_mode = "FP32")  # Get optimized graph
+                                           precision_mode = "FP32")
   with gfile.FastGFile(fp32_file, 'wb') as f:
     f.write(trt_graph.SerializeToString())
   if FLAGS.logging_enabled:
@@ -58,7 +56,7 @@ def getFP16(batch_size=64, workspace_size=1<<30):
   trt_graph = trt.create_inference_graph(getGraph(), [ "classes"],
                                            max_batch_size = batch_size,
                                            max_workspace_size_bytes = workspace_size,
-                                           precision_mode = "FP16")  # Get optimized graph
+                                           precision_mode = "FP16")
   with gfile.FastGFile(fp16_file, 'wb') as f:
     f.write(trt_graph.SerializeToString())
   if FLAGS.logging_enabled:
@@ -70,7 +68,7 @@ def getINT8CalibGraph(batch_size=64, workspace_size=1<<30):
   trt_graph = trt.create_inference_graph(getGraph(), [ "classes"],
                                          max_batch_size=batch_size,
                                          max_workspace_size_bytes=workspace_size,
-                                         precision_mode="INT8")  # calibration
+                                         precision_mode="INT8")
   with gfile.FastGFile(int8_calib_file,'wb') as f:
     f.write(trt_graph.SerializeToString())
   return trt_graph
@@ -95,18 +93,19 @@ def timeGraph(gdef, batch_size=64, num_loops=100, dummy_input=None):
     dataset = dataset.repeat()
     iterator = dataset.make_one_shot_iterator()
     next_element = iterator.get_next()
-    # FOR CONV
-    # out = tf.import_graph_def(
-    #         graph_def = gdef,
-    #         input_map = {"input": next_element},
-    #         return_elements = ["labels"]
-    # )
-    # FOR DENSE
-    out = tf.import_graph_def(
-            graph_def = gdef,
-            input_map = {"mnist_inputs004": next_element},
-            return_elements = ["mnist_labels"]
-    )
+    out = None
+    if FLAGS.conv_or_dense:
+      out = tf.import_graph_def(
+              graph_def = gdef,
+              input_map = {"input": next_element},
+              return_elements = ["labels"]
+      )
+    else:
+      out = tf.import_graph_def(
+              graph_def = gdef,
+              input_map = {"mnist_inputs00" + FLAGS.num_ensembles: next_element},
+              return_elements = ["mnist_labels"]
+      )
     out = out[0].outputs[0]
     outlist.append(out)
     
@@ -118,19 +117,20 @@ def timeGraph(gdef, batch_size=64, num_loops=100, dummy_input=None):
     tf.logging.info("Starting Warmup cycle")
     rmArr = [[tf.RunMetadata(), 0] for x in range(20)]
     for i in range(20):
-      # FOR CONV
-      # valt = sess.run(outlist, feed_dict = {"import/labels:0": dummy2})#np.random.randint(10, size = 64)})
-      # FOR DENSE
-      valt = sess.run(outlist, feed_dict = {"import/mnist_labels:0": dummy2})#np.random.randint(10, size = 64)})      
+      valt = None
+      if FLAGS.conv_or_dense:
+        valt = sess.run(outlist, feed_dict = {"import/labels:0": dummy_labels})
+      else:
+        valt = sess.run(outlist, feed_dict = {"import/mnist_labels:0": dummy_labels})   
     tf.logging.info("Warmup done. Starting real timing")
     num_iters = 50
     for i in range(num_loops):
       tstart = time.time()
       for k in range(num_iters):
-        # FOR CONV
-        # val = sess.run(outlist, feed_dict = {"import/labels:0": dummy2})#np.random.randint(10, size = 64)})
-        # FOR DENSE
-        val = sess.run(outlist, feed_dict = {"import/mnist_labels:0": dummy2})#np.random.randint(10, size = 64)})
+        if FLAGS.conv_or_dense:
+          val = sess.run(outlist, feed_dict = {"import/labels:0": dummy_labels})
+        else:
+          val = sess.run(outlist, feed_dict = {"import/mnist_labels:0": dummy_labels})
       timings.append((time.time() - tstart) / float(num_iters))
       # print("iter ", i, " ", timings[-1])
     sess.close()
@@ -194,15 +194,21 @@ if __name__ == "__main__":
       help='PLACEHOLDER',
       metavar='')
   parser.add_argument(
+      '--num_ensembles',
+      default=4,
+      type=int,
+      help='PLACEHOLDER',
+      metavar='')
+  parser.add_argument(
       '--log_dir_prefix',
       default='logs/',
       type=str,
       help='PLACEHOLDER',
       metavar='')
   parser.add_argument(
-      '--prefix',
-      default='dense',
-      type=str,
+      '--conv_or_dense',
+      default=True,
+      type=bool,
       help='PLACEHOLDER',
       metavar='')
   parser.add_argument(
@@ -213,17 +219,26 @@ if __name__ == "__main__":
       metavar='')
   FLAGS, _ = parser.parse_known_args()
 
+  prefix = None
+  if FLAGS.conv_or_dense:
+    prefix = "conv"
+  else:
+    prefix = "dense"
+
   # Filenames for intermediate models to be saved at
-  graph_file = FLAGS.prefix + "_ensemble.pb"
-  fp32_file = FLAGS.prefix + "_ensemble_TRTFP32.pb"
-  fp16_file = FLAGS.prefix + "_ensemble_TRTFP16.pb"
-  int8_calib_file = FLAGS.prefix + "_ensemble_TRTINT8Calib.pb"
-  int8_infer_file = FLAGS.prefix + "_ensemble_TRTINT8.pb"
+  graph_file = prefix + "_ensemble.pb"
+  fp32_file = prefix + "_ensemble_TRTFP32.pb"
+  fp16_file = prefix + "_ensemble_TRTFP16.pb"
+  int8_calib_file = prefix + "_ensemble_TRTINT8Calib.pb"
+  int8_infer_file = prefix + "_ensemble_TRTINT8.pb"
 
   np.random.seed(FLAGS.seed)
-  # dummy_input = np.random.random_sample((FLAGS.batch_size, 28, 28, 1)) # CONV
-  dummy_input = np.random.random_sample((FLAGS.batch_size, 784)) # DENSE
-  dummy2 = np.random.randint(10, size=64)
+  dummy_input = None
+  if FLAGS.conv_or_dense:
+    dummy_input = np.random.random_sample((FLAGS.batch_size, 28, 28, 1))
+  else:
+    dummy_input = np.random.random_sample((FLAGS.batch_size, 784))
+  dummy_labels = np.random.randint(10, size=64)
   
   print("batch_size = %i" % FLAGS.batch_size)
   print("num_loops = %i" % FLAGS.num_loops)
