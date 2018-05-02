@@ -89,7 +89,7 @@ def timeGraph(gdef, batch_size=64, num_loops=100, dummy_input=None):
     else:
       out = tf.import_graph_def(
               graph_def = gdef,
-              input_map = {"mnist_inputs00" + FLAGS.num_ensembles: next_element},
+              input_map = {"mnist_inputs00" + str(FLAGS.num_ensembles): next_element},
               return_elements = ["mnist_labels"]
       )
     out = out[0].outputs[0]
@@ -188,9 +188,8 @@ if __name__ == "__main__":
   parser.add_argument(
       '--conv_or_dense',
       default=True,
-      type=bool,
       help='Set to True to evaluate convolutional model. Set to False to evalue dense model.',
-      metavar='')
+      action='store_false')
   parser.add_argument(
       '--model_path',
       default='models/model_serving/',
@@ -222,6 +221,7 @@ if __name__ == "__main__":
   print("num_loops = %i" % FLAGS.num_loops)
   print("gpu_fraction = %.2f" % FLAGS.gpu_fraction)
   print("seed = %i" % FLAGS.seed)
+  print("conv" if FLAGS.conv_or_dense else "dense")
 
   if FLAGS.native:
     timings, valnative = timeGraph(getGraph(), FLAGS.batch_size,
