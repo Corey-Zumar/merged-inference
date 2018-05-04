@@ -31,7 +31,8 @@ def dense_model_fn(placeholders):
         x_norm = tf.subtract(x, tf.reduce_mean(x, axis=0))
     input_shape = tf.shape(x_norm)[0]
     # THIS WILL BREAK IF THE BATCH SIZE IS NOT DIVISIBLE BY THE NUMBER OF ENSEMBLES.
-    x_outputs = tf.split(x_norm, [input_shape / FLAGS.n_ensemble for _ in range(FLAGS.n_ensemble)])
+    x_splits = tf.split(x_norm, num_or_size_splits=FLAGS.n_ensemble, axis=0)
+    y_splits = tf.split(y_, num_or_size_splits=FLAGS.n_ensemble)
     # Dense Layer
     # Densely connected layer with 1024 neurons
     # Input Tensor Shape: [FLAGS.batch_size, 7 * 7 * 64]
@@ -41,10 +42,10 @@ def dense_model_fn(placeholders):
         with tf.variable_scope('dense1_' + str(i)) as scope:
             if FLAGS.combine_dense:
                 d = tf.layers.Dense(units=1024, activation=tf.nn.relu, name=scope.name)
-                d.apply(x_outputs[i])
+                d.apply(x_splits[i])
                 dense_layers_1.append(d)
             else:
-                dense_layers_1.append(tf.layers.dense(inputs=x_outputs[i], units=1024, activation=tf.nn.relu, name=scope.name))
+                dense_layers_1.append(tf.layers.dense(inputs=x_splits[i], units=1024, activation=tf.nn.relu, name=scope.name))
     if FLAGS.combine_dense:
         dense_layers_1 = combinedDenseSameInput(inputs=x_norm, layers_to_combine=dense_layers_1)
     dense_layers_2 = []
@@ -68,19 +69,25 @@ def dense_model_fn(placeholders):
             logits_layers.append(tf.layers.dense(inputs=dropouts[i], units=10, name=scope.name))
 
     # averaging step
-    k = 0
-    while len(logits_layers) >= 2:
-        logit_0, logit_1 = logits_layers[0], logits_layers[1]
-        with tf.variable_scope('add_' + str(k)) as scope:
-            combined_logit = tf.add(logit_0, logit_1, name=scope.name)
-        k += 1
-        logits_layers.remove(logit_0)
-        logits_layers.remove(logit_1)
-        logits_layers.append(combined_logit)
-    all_added = logits_layers[0]
-    combined_logits = tf.divide(all_added, float(FLAGS.n_ensemble), name= 'average_tensor')
-    classes = tf.argmax(input=combined_logits, axis=1, name="output_classes")
-    softmax_tensor = tf.nn.softmax(combined_logits, name="softmax_tensor")
+    # k = 0
+    # logits_refs = [x.name]
+    # while len(logits_layers) >= 2:
+    #     logit_0, logit_1 = logits_layers[0], logits_layers[1]
+    #     with tf.variable_scope('add_' + str(k)) as scope:
+    #         combined_logit = tf.add(logit_0, logit_1, name=scope.name)
+    #     k += 1
+    #     logits_layers.remove(logit_0)
+    #     logits_layers.remove(logit_1)
+    #     logits_layers.append(combined_logit)
+    # all_added = logits_layers[0]
+    # combined_logits = tf.divide(all_added, float(FLAGS.n_ensemble), name= 'average_tensor')
+    softmaxes = []
+    for i in range(FLAGS.n_ensemble):
+        softmaxes.append(tf.nn.softmax(logits_layers[i], name="softmax_tensor"))
+    avg_softmax = tf.reduce_mean(tf.concat(softmaxes, axis=1), axis=1)
+    print(avg_softmax)
+    classes = tf.argmax(input=avg_softmax, name="output_classes")
+
 
     # Small utility function to evaluate a dataset by feeding batches of data to
     # {eval_data} and pulling the results from {eval_predictions}.
@@ -96,25 +103,27 @@ def dense_model_fn(placeholders):
             end = begin + FLAGS.batch_size
             if end <= size:
                 batch_data = data[begin:end, ...]
-                preds[begin:end, :] = sess.run(softmax_tensor, feed_dict={x: batch_data})
+                preds[begin:end, :] = sess.run(avg_softmax, feed_dict={x: batch_data})
             else:
                 batch_data = data[-FLAGS.batch_size:, ...]
-                batch_predictions = sess.run(softmax_tensor, feed_dict={x: batch_data})
+                batch_predictions = sess.run(avg_softmax, feed_dict={x: batch_data})
                 preds[begin:, :] = batch_predictions[begin - size:, :]
         return preds
     predictions = {
         # Generate predictions (for PREDICT and EVAL mode)
         "classes": classes,
         # Add `softmax_tensor` to the graph.
-        "probabilities": softmax_tensor
+        "probabilities": avg_softmax
     }
     # Calculate Loss (for both TRAIN and EVAL modes)
-    loss = tf.losses.sparse_softmax_cross_entropy(labels=y_, logits=combined_logits)
+    losses = []
+    for i in range(FLAGS.n_ensemble):
+        losses.append(tf.losses.sparse_softmax_cross_entropy(labels=y_splits[i], logits=logits_layers[i]))
     optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.001)
+    train_ops = [optimizer.minimize(loss=x, global_step=tf.train.get_global_step()) for x in losses]
     # Add evaluation metrics (for EVAL mode)
     eval_metric_ops = {"accuracy": tf.metrics.accuracy(labels=y_, predictions=predictions["classes"])}
-    train_op = optimizer.minimize(loss=loss, global_step=tf.train.get_global_step())
-    return loss, predictions, train_op, eval_metric_ops, eval_in_batches
+    return losses, predictions, train_ops, eval_metric_ops, eval_in_batches
 
 
 def main(_):
@@ -152,7 +161,7 @@ def main(_):
         print(x.name)
         y_ = tf.placeholder(tf.int32, shape=(None,), name='mnist_labels')
         prob = tf.placeholder_with_default(1.0, shape=(), name='dropout_prob')
-        loss, predictions, train_op, eval_metric_ops, eval_in_batches = dense_model_fn({'x' : x, 'labels' : y_, 'dropout' : prob})
+        losses, predictions, train_ops, eval_metric_ops, eval_in_batches = dense_model_fn({'x' : x, 'labels' : y_, 'dropout' : prob})
 
         # Initialize variables
         print('Initializing the model')
@@ -165,20 +174,20 @@ def main(_):
             batch_data = train_data[offset:(offset + FLAGS.batch_size)]
             batch_labels = train_labels[offset:(offset + FLAGS.batch_size)]
             feed_dict = {x : batch_data, y_ : batch_labels, prob : 0.5}
-            sess.run(train_op, feed_dict)
+            for t_o in train_ops:
+                sess.run(t_o, feed_dict)
             if FLAGS.verbose:
                 print('Step %d (epoch %.2f)' % (step, float(step) * FLAGS.batch_size / train_size))
             # Run batch evaluations without backprop on the loss
             if step % FLAGS.eval_frequency == 0:
                 predict_feed_dict = feed_dict.copy()
                 predict_feed_dict[prob] = 1
-                l, batch_preds = sess.run([loss, predictions['probabilities']], feed_dict=predict_feed_dict)
+                batch_preds = sess.run([predictions['probabilities']], feed_dict=predict_feed_dict)
                 elapsed_time = time.time() - start_time
                 start_time = time.time()
                 print('Step %d (epoch %.2f), %.1f ms' %
                   (step, float(step) * FLAGS.batch_size / train_size,
                    1000 * elapsed_time / FLAGS.eval_frequency))
-                print('Minibatch loss: %.3f' % (l))
                 print('Minibatch error: %.1f%%' % error_rate(batch_preds, batch_labels))
                 print('Validation error: %.1f%%' % error_rate(eval_in_batches(val_data, sess), val_labels))
             if step % FLAGS.save_frequency == 0:

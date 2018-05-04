@@ -1,4 +1,7 @@
 import matplotlib.pyplot as plt
+import seaborn as sns
+import pandas as pd
+import numpy as np
 
 dense_2_64_vanilla = [0.214895009995]
 dense_2_64_comb = [0.210766077042]
@@ -66,27 +69,32 @@ for i in x2:
     l_vanilla = eval('dense_8_' + str(i) + '_vanilla')
     comb_dense_8.append(sum(l_vanilla) / float(len(l_vanilla)))
 
-fig, ax = plt.subplots()
-plt.title('MNIST SingleInput,MultipleLayers, Batch Size = 64')
-plt.xlabel('Number of Ensembled Models')
-plt.ylabel('Seconds')
-line1, = ax.plot(x1, comb_dense_64, '-', marker='o', markersize=2, linewidth=1, c='b')
-line2, = ax.plot(x1, vanilla_dense_64, '-', marker='o', markersize=2, linewidth=1, c='r')
+# fig, ax = plt.subplots()
+# plt.title('MNIST SingleInput,MultipleLayers, Batch Size = 64')
+# plt.xlabel('Number of Ensembled Models')
+# plt.ylabel('Seconds')
+# line1, = ax.plot(x1, comb_dense_64, '-', marker='o', markersize=2, linewidth=1, c='b')
+# line2, = ax.plot(x1, vanilla_dense_64, '-', marker='o', markersize=2, linewidth=1, c='r')
+# plt.show()
+build_hue = ['combined' for _ in range(len(comb_dense_8[1:]))]
+x_axis = x2[1:]
+points = (np.array(comb_dense_8[1:]) / np.array(vanilla_dense_8[1:])) - np.ones(len(comb_dense_8[1:]))
+df = pd.DataFrame(dict(bp_elems=x_axis, attribute=points, model_type=build_hue))
+ax = sns.pointplot(x="bp_elems", y="attribute", hue="model_type", data=df)
+ax.set(xlabel="Batch Size", ylabel="Latency Improvement (ratio)")
+ax.legend_.remove()
+# fig, ax = plt.subplots()
+# plt.title('MNIST SingleInput,MultipleLayers, N_Ensembles = 8')
+# plt.xlabel('Batch Size')
+# plt.ylabel('Seconds/Batch')
+# line1, = ax.plot(x2[1:4], comb_dense_8[1:4], '-', marker='.', markersize=2, linewidth=1, c='b')
+# line2, = ax.plot(x2[1:4], vanilla_dense_8[1:4], '-', marker='.', markersize=2, linewidth=1, c='r')
 plt.show()
 
-
-fig, ax = plt.subplots()
-plt.title('MNIST SingleInput,MultipleLayers, N_Ensembles = 8')
-plt.xlabel('Batch Size')
-plt.ylabel('Seconds')
-line1, = ax.plot(x2[:4], comb_dense_8[:4], '-', marker='.', markersize=2, linewidth=1, c='b')
-line2, = ax.plot(x2[:4], vanilla_dense_8[:4], '-', marker='.', markersize=2, linewidth=1, c='r')
-plt.show()
-
-fig, ax = plt.subplots()
-plt.title('MNIST SingleInput,MultipleLayers, N_Ensembles = 8')
-plt.xlabel('Batch Size')
-plt.ylabel('Seconds')
-line1, = ax.plot(x2[4:], comb_dense_8[4:], '-', marker='.', markersize=2, linewidth=1, c='b')
-line2, = ax.plot(x2[4:], vanilla_dense_8[4:], '-', marker='.', markersize=2, linewidth=1, c='r')
-plt.show()
+# fig, ax = plt.subplots()
+# plt.title('MNIST SingleInput,MultipleLayers, N_Ensembles = 8')
+# plt.xlabel('Batch Size')
+# plt.ylabel('Seconds')
+# line1, = ax.plot(x2[4:], comb_dense_8[4:], '-', marker='.', markersize=2, linewidth=1, c='b')
+# line2, = ax.plot(x2[4:], vanilla_dense_8[4:], '-', marker='.', markersize=2, linewidth=1, c='r')
+# plt.show()
