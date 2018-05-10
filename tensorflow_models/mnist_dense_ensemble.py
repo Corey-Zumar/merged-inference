@@ -41,11 +41,11 @@ def dense_model_fn(placeholders):
         input_tensor = processed_inputs[0]
         with tf.variable_scope('dense1_' + str(i)) as scope:
             if FLAGS.combine_dense:
-                d = tf.layers.Dense(units=1024, activation=tf.nn.relu, name=scope.name)
+                d = tf.layers.Dense(units=4096, activation=tf.nn.relu, name=scope.name)
                 d.apply(input_tensor)
                 dense_layers_1.append(d)
             else:
-                dense_layers_1.append(tf.layers.dense(inputs=input_tensor, units=1024, activation=tf.nn.relu, name=scope.name))
+                dense_layers_1.append(tf.layers.dense(inputs=input_tensor, units=4096, activation=tf.nn.relu, name=scope.name))
     if FLAGS.combine_dense:
         dense_layers_1 = combinedDenseSameInput(inputs=processed_inputs[0], layers_to_combine=dense_layers_1)
     dense_layers_2 = []
