@@ -8,6 +8,7 @@ import argparse
 import os
 from merged_dense import combinedDenseSameInput
 import time
+import json
 
 tf.logging.set_verbosity(tf.logging.INFO)
 
@@ -150,7 +151,7 @@ def main(_):
                            shape=(None, IMAGE_SIZE * IMAGE_SIZE),
                            name='mnist_inputs00' + str(FLAGS.n_ensemble))
         print(x.name)
-        y_ = tf.placeholder(tf.int32, shape=(None,), name='mnist_labels')
+        y_ = tf.placeholder(tf.int64, shape=(FLAGS.batch_size,), name='mnist_labels')
         prob = tf.placeholder_with_default(1.0, shape=(), name='dropout_prob')
         loss, predictions, train_op, eval_metric_ops, eval_in_batches = dense_model_fn({'x' : x, 'labels' : y_, 'dropout' : prob})
 
@@ -192,9 +193,18 @@ def main(_):
         summary_path = FLAGS.serving_model_path + '/summary/'
         tf.summary.FileWriter(summary_path, sess.graph)
         # Compute error over the held out test set
-        start_time = time.time()
-        print('Test error: %.1f%%' % error_rate(eval_in_batches(test_data, sess), test_labels))
-        print('Evaluation time:', time.time() - start_time)
+        latencies = []
+        for _ in range(FLAGS.n_trials):
+            start_time = time.time()
+            print('Test error on 1 batch: %.1f%%' % error_rate(eval_in_batches(test_data[:FLAGS.batch_size], sess), test_labels))
+            end_time = time.time() - start_time
+            latencies.append(end_time)
+        if FLAGS.combine_dense:
+            with open('combined_dense_' + str(FLAGS.batch_size) + '.json', 'w') as out_f:
+                json.dump({'latencies' : latencies}, out_f)
+        else:
+            with open('naive_dense_' + str(FLAGS.batch_size) + '.json', 'w') as out_f:
+                json.dump({'latencies' : latencies}, out_f)
         # Save final model
         save_path = saver.save(sess, FLAGS.save_path)
 
@@ -250,5 +260,16 @@ if __name__ == "__main__":
         '--combine_dense',
         action='store_true',
         help='Combine dense layers into a single computational node.')
+    parser.add_argument(
+        '--preprocess_optimized',
+        default=False,
+        type=bool,
+        help='PLACEHOLDER.')
+    parser.add_argument(
+        '--n_trials',
+        default=200,
+        type=int,
+        help='Number of trials to measure success'
+    )
     FLAGS, unparsed = parser.parse_known_args()
     tf.app.run(main=main)
