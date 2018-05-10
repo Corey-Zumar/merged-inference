@@ -2,6 +2,6 @@
 
 while true;
 do
-  nvidia-smi --query-gpu="utilization.gpu" --format=csv >> out
+  nvidia-smi --query-gpu="utilization.gpu" --format=csv >> $1
   sleep 1
 done
