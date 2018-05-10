@@ -200,10 +200,10 @@ def main(_):
             end_time = time.time() - start_time
             latencies.append(end_time)
         if FLAGS.combine_dense:
-            with open('combined_dense_' + str(FLAGS.batch_size) + '.json', 'w') as out_f:
+            with open('combined_dense_' + str(FLAGS.n_ensemble) + '_' + str(FLAGS.batch_size) + '.json', 'w') as out_f:
                 json.dump({'latencies' : latencies}, out_f)
         else:
-            with open('naive_dense_' + str(FLAGS.batch_size) + '.json', 'w') as out_f:
+            with open('naive_dense_' + str(FLAGS.n_ensemble) + '_' + str(FLAGS.batch_size) + '.json', 'w') as out_f:
                 json.dump({'latencies' : latencies}, out_f)
         # Save final model
         save_path = saver.save(sess, FLAGS.save_path)
